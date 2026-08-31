@@ -1,1 +1,5 @@
-{"patches": []}
+{
+  "patches": [
+    "001_midi_mp3_soundfont_del_mixer.py"
+  ]
+}
