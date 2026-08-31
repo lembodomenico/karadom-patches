@@ -93,13 +93,31 @@ mme._find_soundfont = _find_soundfont_dal_mixer
 # =====================================================================
 
 def _expander_del_mixer():
-    """Il nome dell'expander che il Mixer sta usando, "" se suona col SoundFont."""
+    """Il nome dell'expander che KaraDom usa, "" se suona col SoundFont.
+
+    ⚠️ `get_active_player()` risponde SOLO se qualcuno ha gia' suonato un MIDI in
+    questa sessione: il player si crea al primo uso. Chi apriva KaraDom e lanciava
+    subito la conversione si vedeva proporre il SoundFont pur avendo l'expander
+    collegato. Percio' se non e' ancora acceso si guarda quello CONFIGURATO, senza
+    aprirne la porta.
+    """
     try:
         from moduli.expander_midi import get_active_player
         exp = get_active_player()
-        return getattr(exp, "nome_porta", "") if exp else ""
+        if exp:
+            return getattr(exp, "nome_porta", "") or ""
     except Exception:
-        return ""
+        pass
+    try:
+        from moduli.expander_midi import get_mode, detect_expander
+        if get_mode() == "off":
+            return ""
+        porta = detect_expander()
+        if porta:
+            return porta.get("nome", "") or ""
+    except Exception:
+        pass
+    return ""
 
 
 def _dispositivi_ingresso():
@@ -320,7 +338,16 @@ try:
         try:
             exp = _expander_del_mixer()
             self.expander_attivo = exp
-            if exp:
+            if exp and not _dispositivi_ingresso():
+                # C'e' l'expander ma il suo audio non rientra nel PC: non e'
+                # registrabile. Lo si dice subito, senza far premere Crea a vuoto.
+                sf = self.sf_var.get().strip()
+                self.device_ingresso = None
+                testo = ("Expander %s: non rientra nel PC, l'MP3 esce col SoundFont %s"
+                         % (exp, Path(sf).name if sf else ""))
+                colore = "#ff9900"
+                self._suoni_btn.configure(text="…", command=self._pick_sf)
+            elif exp:
                 idx, nome = _ingresso_salvato()
                 self.device_ingresso = idx
                 if idx is not None:
@@ -457,7 +484,9 @@ try:
     _validate_originale = W._validate
 
     def _validate_con_expander(self):
-        if not _expander_del_mixer():
+        # senza expander, o con un expander che non rientra nel PC (non registrabile),
+        # vale il controllo di sempre: serve il SoundFont
+        if not _expander_del_mixer() or not _dispositivi_ingresso():
             return _validate_originale(self)
 
         midi = self.midi_var.get().strip()
@@ -517,16 +546,79 @@ try:
             muted_channels=muted_channels,
         )
         exp = _expander_del_mixer()
-        if exp:
+        if exp and getattr(self, "device_ingresso", None) is not None:
             self._log("🎛 Converto con l'EXPANDER %s (registrazione in tempo reale)." % exp)
             self.exporter = ExpanderMp3Exporter(
                 soundfont_path="", device_ingresso=self.device_ingresso, **comuni)
         else:
+            if exp:
+                self._log("⚠️ L'expander non ha un ritorno audio nel computer: "
+                          "l'MP3 esce con il SoundFont.")
+                self._log("   Per inciderlo davvero serve un cavo dalle sue uscite "
+                          "a un ingresso del PC.")
             self.exporter = mme.MidiMp3Exporter(soundfont_path=sf, **comuni)
 
         _threading.Thread(target=self._worker, daemon=True).start()
 
     W._begin_export = _begin_export
+
+    # --- diagnosi nel LOG della finestra -------------------------------------
+    # Il cliente non ha Python: se l'expander "non viene rilevato" deve poter dire
+    # COSA vede il programma senza installare niente. Aprendo la conversione, il log
+    # elenca uscite MIDI e ingressi audio: basta uno screenshot.
+    _apri_originale = mme.apri_midi_mp3_exporter
+
+    def _uscite_midi():
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class _CAPS(ctypes.Structure):
+                _fields_ = [("wMid", wintypes.WORD), ("wPid", wintypes.WORD),
+                            ("vDriverVersion", wintypes.UINT),
+                            ("szPname", wintypes.WCHAR * 32),
+                            ("wTechnology", wintypes.WORD), ("wVoices", wintypes.WORD),
+                            ("wNotes", wintypes.WORD), ("wChannelMask", wintypes.WORD),
+                            ("dwSupport", wintypes.DWORD)]
+
+            winmm = ctypes.WinDLL("winmm.dll")
+            fuori = []
+            for i in range(winmm.midiOutGetNumDevs()):
+                c = _CAPS()
+                winmm.midiOutGetDevCapsW(i, ctypes.byref(c), ctypes.sizeof(c))
+                fuori.append(c.szPname)
+            return fuori
+        except Exception:
+            return []
+
+    def _apri_con_diagnosi(parent, system=None, midi_path=""):
+        win = _apri_originale(parent, system=system, midi_path=midi_path)
+        try:
+            log = getattr(win, "_log", None)
+            if log:
+                exp = _expander_del_mixer()
+                if exp:
+                    log(_t("🎛 Expander: {n}").format(n=exp))
+                else:
+                    log(_t("🎹 Nessun expander: l'MP3 si crea col SoundFont."))
+                    porte = [p for p in _uscite_midi()
+                             if "microsoft" not in p.lower() and "wavetable" not in p.lower()]
+                    if porte:
+                        log(_t("   (uscite MIDI viste: {p} — se l'expander è una di "
+                               "queste, impostalo in Expander MIDI)").format(p=", ".join(porte)))
+                    else:
+                        log(_t("   (nessuna uscita MIDI hardware: l'expander non risulta "
+                               "collegato o manca il driver)"))
+                if exp:
+                    ing = _dispositivi_ingresso()
+                    if not ing:
+                        log(_t("⚠️ Nessun ingresso audio: l'audio dell'expander non può "
+                               "rientrare nel computer, quindi non si può registrare."))
+        except Exception:
+            pass
+        return win
+
+    mme.apri_midi_mp3_exporter = _apri_con_diagnosi
     print("[PATCH] midi_mp3_exporter: i suoni della conversione li decide il Mixer")
 except Exception as e:
     print("[PATCH] finestra non aggiornata (%s) - la ricerca del SoundFont vale lo stesso" % e)
