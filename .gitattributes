@@ -1,0 +1,4 @@
+# git non deve toccare i fine riga: le patch sono FIRMATE byte per byte
+*.py -text
+*.sig -text binary
+manifest.json -text
