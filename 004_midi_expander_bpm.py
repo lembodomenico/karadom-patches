@@ -126,17 +126,87 @@ class _ZipRemoto:
         pass
 
 
-def _cartella_dipendenze():
-    """La cartella 'dipendenze' accanto al programma."""
+def _diario(riga):
+    """Scrive SEMPRE cosa succede, anche fuori dalla modalita' debug.
+
+    ⚠️ Senza questo si resta ciechi: ad avvio normale KaraDom non scrive log,
+    quindi un errore qui (permessi, rete, cartella sbagliata) sparisce e sembra
+    solo che "non scarica". Il file sta in %LOCALAPPDATA%, che e' scrivibile
+    sempre, anche quando il programma e' installato in Program Files."""
+    print("patch 004: %s" % riga)
     try:
-        import moduli.youtube_local as yl
-        d = yl._dep_dir()
-        if d and os.path.isdir(d):
-            return d
+        base = os.path.join(os.environ.get("LOCALAPPDATA") or
+                            os.path.expanduser("~"), "KaraDom")
+        os.makedirs(base, exist_ok=True)
+        with open(os.path.join(base, "dipendenze_log.txt"), "a", encoding="utf-8") as f:
+            f.write("%s  %s\n" % (time.strftime("%d/%m %H:%M:%S"), riga))
     except Exception:
         pass
-    base = os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
-    return os.path.join(base, "dipendenze")
+
+
+def _cartella_scrivibile(d):
+    try:
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, "_prova_scrittura.tmp")
+        with open(p, "wb") as f:
+            f.write(b"x")
+        os.remove(p)
+        return True
+    except Exception:
+        return False
+
+
+def _cartella_dipendenze():
+    """Dove mettere le dipendenze: accanto al programma se si puo' scrivere,
+    altrimenti in %LOCALAPPDATA%\\KaraDom\\dipendenze.
+
+    KaraDom installato in Program Files gira SENZA privilegi di amministratore:
+    li' dentro non puo' scrivere. In quel caso i file vanno in una cartella
+    dell'utente, e piu' sotto si insegna al programma a cercarli anche li'."""
+    accanto = None
+    try:
+        import moduli.youtube_local as yl
+        accanto = yl._dep_dir()
+    except Exception:
+        accanto = None
+    if not accanto:
+        base = os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
+        accanto = os.path.join(base, "dipendenze")
+
+    if _cartella_scrivibile(accanto):
+        return accanto, True
+    alternativa = os.path.join(os.environ.get("LOCALAPPDATA") or
+                               os.path.expanduser("~"), "KaraDom", "dipendenze")
+    _diario("%s non e' scrivibile (serve l'amministratore): uso %s"
+            % (accanto, alternativa))
+    return alternativa, False
+
+
+def _insegna_dove_cercare(cartella):
+    """Il programma cerca il server yt-dlp solo accanto a se': se i file sono
+    finiti nella cartella dell'utente, deve guardare anche li'."""
+    try:
+        import moduli.youtube_local as yl
+    except Exception:
+        return
+    py_prima, sc_prima = yl._server_py, yl._server_script
+
+    def _server_py():
+        p = py_prima()
+        if p:
+            return p
+        p = os.path.join(cartella, "pyserver", "python.exe")
+        return p if os.path.exists(p) else None
+
+    def _server_script():
+        s = sc_prima()
+        if s:
+            return s
+        s = os.path.join(cartella, "ytdlp_local_server.py")
+        return s if os.path.exists(s) else None
+
+    yl._server_py = _server_py
+    yl._server_script = _server_script
 
 
 def _scrivi_file(percorso, dati):
@@ -155,25 +225,29 @@ def _dipendenze_youtube():
     """
     def lavora():
         try:
-            dest = _cartella_dipendenze()
+            dest, accanto = _cartella_dipendenze()
+            if not accanto:
+                _insegna_dove_cercare(dest)
+            _diario("controllo le dipendenze in %s" % dest)
+
             zf = zipfile.ZipFile(_ZipRemoto(ZIP_DIPENDENZE))
             manca = [i for i in zf.infolist() if not i.is_dir() and not
                      os.path.exists(os.path.join(dest, i.filename.replace("/", os.sep)))]
             if not manca:
-                print("patch 004: dipendenze gia' complete")
+                _diario("dipendenze gia' complete, niente da scaricare")
                 return
-            print("patch 004: mancano %d file nelle dipendenze, li scarico in %s"
-                  % (len(manca), dest))
+            _diario("mancano %d file su %d, li scarico" % (len(manca), len(zf.infolist())))
             presi = byte = 0
 
             # ⚠️ Un file alla volta costa una richiesta HTTP a testa: misurato,
             #    circa 2,5 file al secondo. Se ne mancano tanti (e' il caso di
             #    `pyserver/`, che da solo sono migliaia di file) conviene tirare
-            #    giu' lo zip intero una volta sola e pescare da li'.
+            #    giu' lo zip intero una volta sola: misurato, 4263 file in 25 s.
             if len(manca) > 200:
-                print("patch 004: sono tanti: scarico lo zip in una volta sola")
+                _diario("sono tanti: scarico lo zip in una volta sola")
                 tmp = os.path.join(os.environ.get("TEMP") or dest, "_dipendenze_kd.zip")
-                with urllib.request.urlopen(ZIP_DIPENDENZE, timeout=60) as r,                         open(tmp, "wb") as f:
+                with urllib.request.urlopen(ZIP_DIPENDENZE, timeout=60) as r, \
+                        open(tmp, "wb") as f:
                     while True:
                         blocco = r.read(1024 * 512)
                         if not blocco:
@@ -187,31 +261,30 @@ def _dipendenze_youtube():
                             _scrivi_file(os.path.join(dest, info.filename.replace("/", os.sep)), dati)
                             presi += 1
                             byte += len(dati)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            if presi == 0:
+                                _diario("scrittura non riuscita (%s): %s" % (info.filename, e))
                 finally:
                     zf.close()
                     try:
                         os.remove(tmp)
                     except Exception:
                         pass
-                print("patch 004: dipendenze completate - %d file, %.1f MB"
-                      % (presi, byte / 1048576.0))
-                return
+            else:
+                for info in manca:
+                    try:
+                        with zf.open(info) as f:
+                            dati = f.read()
+                        _scrivi_file(os.path.join(dest, info.filename.replace("/", os.sep)), dati)
+                        presi += 1
+                        byte += len(dati)
+                    except Exception as e:
+                        _diario("  %s non scaricato (%s)" % (info.filename, e))
 
-            for info in manca:
-                try:
-                    with zf.open(info) as f:
-                        dati = f.read()
-                    _scrivi_file(os.path.join(dest, info.filename.replace("/", os.sep)), dati)
-                    presi += 1
-                    byte += len(dati)
-                except Exception as e:
-                    print("patch 004:   %s non scaricato (%s)" % (info.filename, e))
-            print("patch 004: dipendenze completate - %d file, %.1f MB"
-                  % (presi, byte / 1048576.0))
+            _diario("dipendenze completate: %d file, %.1f MB in %s"
+                    % (presi, byte / 1048576.0, dest))
         except Exception as e:
-            print("patch 004: scaricamento dipendenze non riuscito: %s" % e)
+            _diario("scaricamento non riuscito: %s: %s" % (type(e).__name__, e))
 
     threading.Thread(target=lavora, daemon=True).start()
     return True
