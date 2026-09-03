@@ -1,6 +1,7 @@
 {
   "patches": [
     "001_midi_mp3_soundfont_del_mixer.py",
-    "002_patch_arrivano_subito.py"
+    "002_patch_arrivano_subito.py",
+    "003_trial_orologio_e_trova_file.py"
   ]
 }
