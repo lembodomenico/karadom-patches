@@ -74,84 +74,142 @@ import os
 import sys
 import threading
 import time
+import urllib.request
+import zipfile
+
+ZIP_DIPENDENZE = ("https://github.com/lembodomenico/KaraDom/releases/download/"
+                  "dipendenze/dipendenze.zip")
 import zlib
 
-def _scarica_dipendenze(ds, dbg=None):
-    """Scarica dallo zip i file che MANCANO nella cartella dipendenze.
+class _ZipRemoto:
+    """Legge uno zip su HTTP a pezzi (Range), senza scaricarlo tutto.
 
-    Usa le funzioni di dep_sync (lettura per Range: si prende solo quello che
-    serve, non i 400 MB). Non tocca i file gia' presenti: cosi' non puo'
-    riportare indietro roba piu' nuova - per esempio yt-dlp.exe, che si
-    aggiorna per conto suo."""
-    import zipfile
-    dest = ds._dest_dir()
-    zf = zipfile.ZipFile(ds._HttpRangeFile(ds.DEP_ZIP_URL, ds.TIMEOUT))
-    manca = []
-    for info in zf.infolist():
-        if info.is_dir():
-            continue
-        p = os.path.join(dest, info.filename.replace("/", os.sep))
-        if not os.path.exists(p):
-            manca.append(info)
-    if not manca:
-        return 0, 0
-    presi = byte = 0
-    for info in manca:
-        try:
-            raw = ds._fetch_member(ds.DEP_ZIP_URL, info, ds.TIMEOUT)
-            ds._write_atomic(os.path.join(dest, info.filename.replace("/", os.sep)), raw)
-            presi += 1
-            byte += info.file_size
-        except Exception:
-            pass
-    return presi, byte
+    ⚠️ Sta qui dentro e non usa `moduli.dep_sync` perche' **quel modulo non
+    esiste nella build**: Nuitka compila solo cio' che qualcuno importa, e
+    dep_sync non era chiamato da nessuno (verificato: la stringa 'moduli.dep_sync'
+    non compare in KaraDom.exe). La patch deve percio' bastare a se stessa."""
+
+    def __init__(self, url, timeout=30):
+        self.url, self.timeout, self.pos = url, timeout, 0
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            self.size = int(r.headers.get("Content-Length") or 0)
+            self.url = r.geturl()          # segue il redirect di GitHub
+        if not self.size:
+            raise OSError("lunghezza dello zip sconosciuta")
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, offset, whence=0):
+        self.pos = (offset if whence == 0 else
+                    self.pos + offset if whence == 1 else self.size + offset)
+        return self.pos
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = self.size - self.pos
+        if n <= 0 or self.pos >= self.size:
+            return b""
+        fine = min(self.pos + n, self.size) - 1
+        req = urllib.request.Request(
+            self.url, headers={"Range": "bytes=%d-%d" % (self.pos, fine)})
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            dati = r.read()
+        self.pos += len(dati)
+        return dati
+
+    def close(self):
+        pass
+
+
+def _cartella_dipendenze():
+    """La cartella 'dipendenze' accanto al programma."""
+    try:
+        import moduli.youtube_local as yl
+        d = yl._dep_dir()
+        if d and os.path.isdir(d):
+            return d
+    except Exception:
+        pass
+    base = os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
+    return os.path.join(base, "dipendenze")
+
+
+def _scrivi_file(percorso, dati):
+    os.makedirs(os.path.dirname(percorso), exist_ok=True)
+    tmp = percorso + ".part"
+    with open(tmp, "wb") as f:
+        f.write(dati)
+    os.replace(tmp, percorso)
 
 
 def _dipendenze_youtube():
-    """Indirizzo giusto dello zip, e le dipendenze mancanti scaricate davvero.
+    """Scarica dallo zip i file che MANCANO nella cartella dipendenze.
 
-    ⚠️ Due difetti a monte, tutti e due verificati il 3 set 2026:
-      - `dep_sync` puntava a www.karadom.it/download/dipendenze.zip, che
-        risponde 404 (lo zip lo pubblica la build su GitHub Releases);
-      - e comunque **nessuno chiamava mai la sincronia**: il modulo c'era, ma
-        `sync_dipendenze` non era invocata da nessuna parte del programma.
-    Percio' nell'installato mancavano `ytdlp_local_server.py`, `yt-dlp.conf` e
-    la cartella `pyserver/`, e il server yt-dlp locale non partiva mai.
+    Non tocca quelli gia' presenti: cosi' non puo' riportare indietro roba piu'
+    nuova (per esempio yt-dlp.exe, che si aggiorna per conto suo).
     """
-    giusto = ("https://github.com/lembodomenico/KaraDom/releases/download/"
-              "dipendenze/dipendenze.zip")
-    try:
-        import moduli.dep_sync as ds
-    except Exception as e:
-        print("patch 004: dep_sync non raggiungibile (%s): dipendenze non aggiornate" % e)
-        return False
-
-    vecchio = getattr(ds, "DEP_ZIP_URL", "")
-    if vecchio != giusto:
-        ds.DEP_ZIP_URL = giusto
-        # non basta la variabile: `sync_dipendenze(url=DEP_ZIP_URL)` ha
-        # l'indirizzo congelato nel valore di default, letto all'import
-        try:
-            pred = list(ds.sync_dipendenze.__defaults__ or ())
-            if vecchio in pred:
-                pred[pred.index(vecchio)] = giusto
-                ds.sync_dipendenze.__defaults__ = tuple(pred)
-        except Exception:
-            pass
-        print("patch 004: indirizzo dello zip delle dipendenze corretto (era un 404)")
-
     def lavora():
         try:
-            # se la build e' recente la funzione ce l'ha gia' il programma
-            if hasattr(ds, "completa_mancanti"):
-                presi, byte = ds.completa_mancanti(log=print)
-            else:
-                presi, byte = _scarica_dipendenze(ds)
-            if presi:
-                print("patch 004: dipendenze completate - %d file scaricati (%.1f MB) in %s"
-                      % (presi, byte / 1048576.0, ds._dest_dir()))
-            else:
-                print("patch 004: dipendenze gia' complete, niente da scaricare")
+            dest = _cartella_dipendenze()
+            zf = zipfile.ZipFile(_ZipRemoto(ZIP_DIPENDENZE))
+            manca = [i for i in zf.infolist() if not i.is_dir() and not
+                     os.path.exists(os.path.join(dest, i.filename.replace("/", os.sep)))]
+            if not manca:
+                print("patch 004: dipendenze gia' complete")
+                return
+            print("patch 004: mancano %d file nelle dipendenze, li scarico in %s"
+                  % (len(manca), dest))
+            presi = byte = 0
+
+            # ⚠️ Un file alla volta costa una richiesta HTTP a testa: misurato,
+            #    circa 2,5 file al secondo. Se ne mancano tanti (e' il caso di
+            #    `pyserver/`, che da solo sono migliaia di file) conviene tirare
+            #    giu' lo zip intero una volta sola e pescare da li'.
+            if len(manca) > 200:
+                print("patch 004: sono tanti: scarico lo zip in una volta sola")
+                tmp = os.path.join(os.environ.get("TEMP") or dest, "_dipendenze_kd.zip")
+                with urllib.request.urlopen(ZIP_DIPENDENZE, timeout=60) as r,                         open(tmp, "wb") as f:
+                    while True:
+                        blocco = r.read(1024 * 512)
+                        if not blocco:
+                            break
+                        f.write(blocco)
+                zf = zipfile.ZipFile(tmp)
+                try:
+                    for info in manca:
+                        try:
+                            dati = zf.read(info.filename)
+                            _scrivi_file(os.path.join(dest, info.filename.replace("/", os.sep)), dati)
+                            presi += 1
+                            byte += len(dati)
+                        except Exception:
+                            pass
+                finally:
+                    zf.close()
+                    try:
+                        os.remove(tmp)
+                    except Exception:
+                        pass
+                print("patch 004: dipendenze completate - %d file, %.1f MB"
+                      % (presi, byte / 1048576.0))
+                return
+
+            for info in manca:
+                try:
+                    with zf.open(info) as f:
+                        dati = f.read()
+                    _scrivi_file(os.path.join(dest, info.filename.replace("/", os.sep)), dati)
+                    presi += 1
+                    byte += len(dati)
+                except Exception as e:
+                    print("patch 004:   %s non scaricato (%s)" % (info.filename, e))
+            print("patch 004: dipendenze completate - %d file, %.1f MB"
+                  % (presi, byte / 1048576.0))
         except Exception as e:
             print("patch 004: scaricamento dipendenze non riuscito: %s" % e)
 
