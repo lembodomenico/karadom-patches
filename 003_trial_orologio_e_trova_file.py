@@ -211,7 +211,10 @@ def _aggancia_trova_file():
         try:
             if path and os.path.exists(path):
                 if sys.platform == "win32":
-                    subprocess.Popen(["explorer", "/select," + os.path.normpath(path)])
+                    # come STRINGA: passandolo come lista, Python racchiude tutto
+                    # l'argomento appena il percorso ha uno spazio ed explorer
+                    # smette di riconoscere /select (apriva Documenti).
+                    subprocess.Popen('explorer /select,"%s"' % os.path.normpath(path))
                 elif sys.platform == "darwin":
                     subprocess.Popen(["open", "-R", path])
                 else:
