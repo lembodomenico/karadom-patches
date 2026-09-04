@@ -1,5 +1,10 @@
 # 004_midi_expander_bpm.py
 #
+# [2026-09-04] QUESTA PATCH NON TOCCA PIU' IL MIDI.
+# Il fix dei thread e la spia sono usciti di qui: la spia vive da sola nella
+# 006, cosi' si puo' provare KaraDom col motore MIDI originale senza perdere
+# le due correzioni che stanno qui sotto e non c'entrano niente col MIDI.
+#
 # IL MIDI CON L'EXPANDER RALLENTAVA MENTRE SI SCRIVE NELLA RICERCA.
 # Segnalato il 3 settembre 2026: "quando sta riproducendo dei MIDI con
 # l'expander, se si scrive dentro i campi ricerca la riproduzione rallenta
@@ -326,102 +331,6 @@ def _riavvio_debug():
     return True
 
 
-def _log():
-    """La funzione di log di KaraDom, se il programma gira in modalita' debug."""
-    try:
-        from moduli.debug_logger import DEBUG, dbg
-        return dbg if DEBUG else None
-    except Exception:
-        return None
-
-
-def _sorveglia(player, dbg):
-    """Confronta l'avanzamento della MUSICA con quello dell'OROLOGIO.
-
-    Non entra nel motore: legge la posizione del brano da fuori, ogni due
-    secondi. Se in due secondi reali la musica ne fa 1,8 vuol dire che il brano
-    sta andando al 90% - cioe' 120 BPM che diventano 108. E' la misura del
-    sintomo, non di una causa ipotizzata."""
-    try:
-        leggi = player.get_position_ms
-    except Exception:
-        return
-    peggio = 1.0
-    persi = 0.0
-    try:
-        pos0, t0 = leggi(), time.perf_counter()
-        inizio = t0
-        while getattr(player, "is_playing", False):
-            time.sleep(2.0)
-            if not getattr(player, "is_playing", False):
-                break          # brano finito o fermato: l'ultima finestra e' monca
-                               # e darebbe un falso allarme (misurato: 48%)
-            pos1, t1 = leggi(), time.perf_counter()
-            reale = (t1 - t0) * 1000.0
-            musica = pos1 - pos0
-            pos0, t0 = pos1, t1
-            if reale < 100 or musica < 0:      # cambio brano o salto: si riparte
-                continue
-            velocita = float(getattr(player, "_speed", 1.0) or 1.0)
-            rapporto = musica / (reale * velocita)
-            if rapporto < 0.97:                 # sotto il 97% si sente
-                persi += reale * velocita - musica
-                if rapporto < peggio:
-                    peggio = rapporto
-                dbg("MIDI-TIMING",
-                    "la musica sta andando al %.0f%% del dovuto "
-                    "(in %.1f s reali ne ha suonati %.1f) - expander=%s, "
-                    "thread vivi=%d" % (
-                        rapporto * 100, reale / 1000.0, musica / 1000.0,
-                        "si" if getattr(player, "is_expander", False) else "no",
-                        threading.active_count()))
-        if peggio < 1.0:
-            dbg("MIDI-TIMING",
-                "RIEPILOGO brano: durata %.0f s, il peggio e' stato %.0f%%, "
-                "musica persa in tutto %.0f ms" % (
-                    time.perf_counter() - inizio, peggio * 100, persi))
-    except Exception:
-        pass
-
-
-def _applica():
-    import moduli.fluidsynth_player as fp
-
-    P = getattr(fp, "FluidSynthPlayer", None)
-    if P is None or not hasattr(P, "play"):
-        print("patch 004: motore MIDI diverso, salto")
-        return False
-    if getattr(P, "_ha_stop_pulito", False):
-        return True
-
-    play_originale = P.play
-
-    def play(self, *a, **k):
-        # gli argomenti si inoltrano cosi' come sono: se una versione del
-        # programma ne avesse di piu', la patch non deve rompere la riproduzione
-        # il thread della riproduzione precedente non deve poter sopravvivere:
-        # gli si lascia il suo evento di stop (gia' segnato) e se ne prepara uno
-        # nuovo per questa riproduzione
-        try:
-            self.stop()
-            self._stop_event = threading.Event()
-            self._playback_thread = None
-        except Exception:
-            pass
-        esito = play_originale(self, *a, **k)
-        dbg = _log()
-        if dbg is not None:
-            threading.Thread(target=_sorveglia, args=(self, dbg), daemon=True).start()
-        return esito
-
-    P.play = play
-    P._ha_stop_pulito = True
-
-    print("patch 004: ogni riproduzione ha il suo stop; in modalita' debug "
-          "la spia misura se la musica resta indietro")
-    return True
-
-
 try:
     _dipendenze_youtube()
 except Exception as _e:
@@ -431,8 +340,3 @@ try:
     _riavvio_debug()
 except Exception as _e:
     print("patch 004 (riavvio debug): %s" % _e)
-
-try:
-    _applica()
-except Exception as _e:
-    print("patch 004: %s" % _e)
