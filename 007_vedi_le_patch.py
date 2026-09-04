@@ -17,9 +17,12 @@
 #   - la data in cui e' arrivata sul PC;
 #   - la prima riga di commento del file, che dice a cosa serve.
 #
-# Le applicate le sa `moduli.hotfix.APPLICATE`, che il programma riempie
-# all'avvio: non e' un elenco indovinato dai file presenti, e' quello che ha
-# funzionato davvero.
+# COME FA A SAPERLO. Tre fonti, in ordine: l'elenco che il programma riempie
+# mentre applica (`hotfix.APPLICATE`); se quel set non c'e' - nei compilati piu'
+# vecchi non esiste - la VERIFICA DELLA FIRMA con la stessa funzione che usa
+# KaraDom; e se non si arriva nemmeno li', si dice solo che il file e' arrivato,
+# senza inventare un giudizio. La prima versione si fidava solo della prima
+# fonte e dava TUTTE le patch per scartate, comprese quelle che funzionavano.
 #
 # NOTA su come si aggancia al menu. Il menu Extra si costruisce dentro una
 # funzione di ui.py e la sua variabile e' locale: da fuori non ci si arriva.
@@ -64,16 +67,48 @@ def _descrizione(percorso):
 
 
 def _stato(nome, percorso):
-    """(stato, spiegazione) di una patch che sta nella cartella."""
+    """(stato, spiegazione) di una patch che sta nella cartella.
+
+    🔴 Non ci si puo' fidare di una sola fonte. `hotfix.APPLICATE` e' la piu'
+    precisa - la riempie il programma mentre applica - ma nelle versioni
+    COMPILATE piu' vecchie quel set non esiste, e chiedendolo si finiva
+    nell'except: la prima prova dava TUTTE le patch per "scartate", comprese
+    quelle che stavano palesemente funzionando. Quindi si scende per gradi:
+
+      1. `APPLICATE`, se c'e';
+      2. altrimenti si VERIFICA LA FIRMA con la stessa funzione che usa il
+         programma (`hotfix._verify`): se la firma e' buona, KaraDom quella
+         patch l'ha eseguita;
+      3. se non si arriva nemmeno a quella, si dice che il file c'e' e basta,
+         senza inventarsi un giudizio.
+    """
+    sig = percorso + ".sig"
+    if not os.path.exists(sig):
+        return "scartata", "manca la firma: e' arrivata a meta'"
+
+    # 1) l'elenco di quelle applicate davvero
     try:
         from moduli.hotfix import APPLICATE
-        if nome in APPLICATE:
-            return "attiva", ""
+        if APPLICATE:                      # se e' vuoto non dice niente di utile
+            if nome in APPLICATE:
+                return "attiva", ""
+            return "scartata", "il programma non l'ha applicata"
     except Exception:
         pass
-    if not os.path.exists(percorso + ".sig"):
-        return "scartata", "manca la firma"
-    return "scartata", "firma non valida, o errore mentre si applicava"
+
+    # 2) la firma, controllata come la controlla KaraDom
+    try:
+        from moduli import hotfix as _h
+        dati = open(percorso, "rb").read()
+        firma = open(sig, "rb").read()
+        if _h._verify(dati, firma):
+            return "attiva", ""
+        return "scartata", "firma non valida: il file e' stato toccato dopo"
+    except Exception:
+        pass
+
+    # 3) non si puo' giudicare: si dice solo quello che si sa
+    return "arrivata", "c'e' anche la firma (non ho potuto verificarla qui)"
 
 
 def _finestra(parent=None):
@@ -112,6 +147,7 @@ def _finestra(parent=None):
 
     t.tag_configure("ok", foreground="#4ade80")
     t.tag_configure("no", foreground="#f87171")
+    t.tag_configure("forse", foreground="#fbbf24")
 
     attive = 0
     for nome in file:
@@ -119,10 +155,10 @@ def _finestra(parent=None):
         stato, perche = _stato(nome, p)
         quando = time.strftime("%d/%m/%Y %H:%M", time.localtime(os.path.getmtime(p)))
         testo = _descrizione(p) if stato == "attiva" else (perche or _descrizione(p))
-        t.insert("", "end", values=("attiva" if stato == "attiva" else "scartata",
-                                    nome, quando, testo),
-                 tags=("ok" if stato == "attiva" else "no",))
-        attive += 1 if stato == "attiva" else 0
+        t.insert("", "end", values=(stato, nome, quando, testo),
+                 tags=("ok" if stato == "attiva"
+                       else ("forse" if stato == "arrivata" else "no"),))
+        attive += 1 if stato in ("attiva", "arrivata") else 0
 
     if not file:
         t.insert("", "end", values=("", "(nessuna patch)", "",
