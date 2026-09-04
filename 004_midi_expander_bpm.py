@@ -1,11 +1,9 @@
 # 004_midi_expander_bpm.py
 #
-# ⛔ [2026-09-04] LE PARTI MIDI SONO STATE TOLTE, su richiesta dell'utente:
-#    "riporta lo stato a prima che facessi la prima modifica" per il problema
-#    dei BPM che calano con l'expander. Via il nuovo evento di stop per ogni
-#    riproduzione e via la spia MIDI-TIMING: il motore MIDI torna com'era.
-#    Restano SOLO le due correzioni che non c'entrano col MIDI e che
-#    funzionano: il riavvio in debug e le dipendenze di YouTube.
+# [2026-09-04] IL MOTORE MIDI E' TORNATO COM'ERA, su richiesta dell'utente.
+#    Tolto il fix dei thread zombie: era l'unica parte che toccava la
+#    riproduzione. RESTANO la SPIA del timing (misura e basta, non modifica
+#    niente), il riavvio in debug e le dipendenze di YouTube.
 #
 # IL MIDI CON L'EXPANDER RALLENTAVA MENTRE SI SCRIVE NELLA RICERCA.
 # Segnalato il 3 settembre 2026: "quando sta riproducendo dei MIDI con
@@ -342,6 +340,90 @@ def _log():
         return None
 
 
+def _sorveglia(player, dbg):
+    """Confronta l'avanzamento della MUSICA con quello dell'OROLOGIO.
+
+    Non entra nel motore: legge la posizione del brano da fuori, ogni due
+    secondi. Se in due secondi reali la musica ne fa 1,8 vuol dire che il brano
+    sta andando al 90% - cioe' 120 BPM che diventano 108. E' la misura del
+    sintomo, non di una causa ipotizzata."""
+    try:
+        leggi = player.get_position_ms
+    except Exception:
+        return
+    peggio = 1.0
+    persi = 0.0
+    try:
+        pos0, t0 = leggi(), time.perf_counter()
+        inizio = t0
+        while getattr(player, "is_playing", False):
+            time.sleep(2.0)
+            if not getattr(player, "is_playing", False):
+                break          # brano finito o fermato: l'ultima finestra e' monca
+                               # e darebbe un falso allarme (misurato: 48%)
+            pos1, t1 = leggi(), time.perf_counter()
+            reale = (t1 - t0) * 1000.0
+            musica = pos1 - pos0
+            pos0, t0 = pos1, t1
+            if reale < 100 or musica < 0:      # cambio brano o salto: si riparte
+                continue
+            velocita = float(getattr(player, "_speed", 1.0) or 1.0)
+            rapporto = musica / (reale * velocita)
+            if rapporto < 0.97:                 # sotto il 97% si sente
+                persi += reale * velocita - musica
+                if rapporto < peggio:
+                    peggio = rapporto
+                dbg("MIDI-TIMING",
+                    "la musica sta andando al %.0f%% del dovuto "
+                    "(in %.1f s reali ne ha suonati %.1f) - expander=%s, "
+                    "thread vivi=%d" % (
+                        rapporto * 100, reale / 1000.0, musica / 1000.0,
+                        "si" if getattr(player, "is_expander", False) else "no",
+                        threading.active_count()))
+        if peggio < 1.0:
+            dbg("MIDI-TIMING",
+                "RIEPILOGO brano: durata %.0f s, il peggio e' stato %.0f%%, "
+                "musica persa in tutto %.0f ms" % (
+                    time.perf_counter() - inizio, peggio * 100, persi))
+    except Exception:
+        pass
+
+
+def _accendi_spia():
+    """Avvia SOLO la misura, senza toccare il motore MIDI.
+
+    (2026-09-04) Il fix che stava qui - dare a ogni riproduzione un evento di
+    stop nuovo, per non lasciare thread zombie - E' STATO TOLTO su richiesta
+    dell'utente: il MIDI deve tornare esattamente com'era. Resta solo la SPIA,
+    che non modifica niente: legge la posizione del brano dall'esterno ogni due
+    secondi e scrive nel log quanto la musica resta indietro. Va tenuta anche
+    quando le cure si tolgono, se no il rallentamento si discute a orecchio.
+    """
+    import moduli.fluidsynth_player as fp
+
+    P = getattr(fp, "FluidSynthPlayer", None)
+    if P is None or not hasattr(P, "play"):
+        print("patch 004: motore MIDI diverso, salto la spia")
+        return False
+    if getattr(P, "_ha_spia", False):
+        return True
+
+    play_originale = P.play
+
+    def play(self, *a, **k):
+        esito = play_originale(self, *a, **k)      # il motore NON si tocca
+        dbg = _log()
+        if dbg is not None:
+            threading.Thread(target=_sorveglia, args=(self, dbg), daemon=True).start()
+        return esito
+
+    P.play = play
+    P._ha_spia = True
+    print("patch 004: spia del timing attiva (solo in modalita' debug); "
+          "il motore MIDI e' quello originale")
+    return True
+
+
 try:
     _dipendenze_youtube()
 except Exception as _e:
@@ -351,3 +433,8 @@ try:
     _riavvio_debug()
 except Exception as _e:
     print("patch 004 (riavvio debug): %s" % _e)
+
+try:
+    _accendi_spia()
+except Exception as _e:
+    print("patch 004 (spia): %s" % _e)
