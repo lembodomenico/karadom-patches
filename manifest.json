@@ -7,7 +7,7 @@
     "005_ricerca_non_soffoca_il_midi.py",
     "006_spia_midi.py",
     "007_vedi_le_patch.py",
-    "008_bpm_dopo_un_blocco_si_riallinea.py",
+    "008_bpm_orologio_assoluto.py",
     "009_preferiti_si_indicizza_una_volta.py",
     "010_tasto_destro_rilegge_il_disco.py"
   ]
