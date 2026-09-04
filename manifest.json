@@ -4,6 +4,7 @@
     "002_patch_arrivano_subito.py",
     "003_trial_orologio_e_trova_file.py",
     "004_midi_expander_bpm.py",
+    "005_ricerca_non_soffoca_il_midi.py",
     "006_spia_midi.py",
     "007_vedi_le_patch.py",
     "008_bpm_il_tempo_perso_si_recupera.py"
