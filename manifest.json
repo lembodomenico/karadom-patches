@@ -7,6 +7,7 @@
     "005_ricerca_non_soffoca_il_midi.py",
     "006_spia_midi.py",
     "007_vedi_le_patch.py",
-    "008_bpm_il_tempo_perso_si_recupera.py"
+    "008_bpm_il_tempo_perso_si_recupera.py",
+    "009_preferiti_400000_basi.py"
   ]
 }
