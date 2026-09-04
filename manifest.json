@@ -9,6 +9,7 @@
     "007_vedi_le_patch.py",
     "008_bpm_orologio_assoluto.py",
     "009_preferiti_si_indicizza_una_volta.py",
-    "010_tasto_destro_rilegge_il_disco.py"
+    "010_tasto_destro_rilegge_il_disco.py",
+    "011_expander_tempo_dal_driver.py"
   ]
 }
