@@ -1,15 +1,9 @@
 {
   "patches": [
-    "001_midi_mp3_soundfont_del_mixer.py",
     "002_patch_arrivano_subito.py",
     "003_trial_orologio_e_trova_file.py",
-    "004_midi_expander_bpm.py",
-    "005_ricerca_non_soffoca_il_midi.py",
-    "006_spia_midi.py",
     "007_vedi_le_patch.py",
-    "008_bpm_orologio_assoluto.py",
     "009_preferiti_si_indicizza_una_volta.py",
-    "010_tasto_destro_rilegge_il_disco.py",
-    "011_expander_tempo_dal_driver.py"
+    "010_tasto_destro_rilegge_il_disco.py"
   ]
 }
