@@ -58,6 +58,7 @@ def _sorveglia(player, dbg):
         return
     peggio = 1.0
     persi = 0.0
+    righe = []      # si scrive tutto DOPO, non mentre suona
     try:
         pos0, t0 = leggi(), time.perf_counter()
         inizio = t0
@@ -78,13 +79,21 @@ def _sorveglia(player, dbg):
                 persi += reale * velocita - musica
                 if rapporto < peggio:
                     peggio = rapporto
-                dbg("MIDI-TIMING",
-                    "la musica sta andando al %.0f%% del dovuto "
-                    "(in %.1f s reali ne ha suonati %.1f) - expander=%s, "
-                    "thread vivi=%d" % (
-                        rapporto * 100, reale / 1000.0, musica / 1000.0,
-                        "si" if getattr(player, "is_expander", False) else "no",
-                        threading.active_count()))
+                # ⚠️ NON si scrive nel log adesso: scrivere su file mentre la
+                #    musica suona significa fare I/O proprio nei momenti in cui
+                #    il thread sta gia' faticando, e la misura disturberebbe
+                #    cio' che deve misurare. Si tiene tutto in memoria (una
+                #    tupla per finestra, poche decine per brano) e si scrive
+                #    quando il brano e' finito.
+                righe.append((rapporto, reale, musica,
+                              getattr(player, "is_expander", False),
+                              threading.active_count()))
+        for _r, _re, _mu, _exp, _th in righe:
+            dbg("MIDI-TIMING",
+                "la musica e' andata al %.0f%% del dovuto "
+                "(in %.1f s reali ne ha suonati %.1f) - expander=%s, "
+                "thread vivi=%d" % (_r * 100, _re / 1000.0, _mu / 1000.0,
+                                    "si" if _exp else "no", _th))
         if peggio < 1.0:
             dbg("MIDI-TIMING",
                 "RIEPILOGO brano: durata %.0f s, il peggio e' stato %.0f%%, "
