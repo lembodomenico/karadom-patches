@@ -195,7 +195,16 @@ def _aggancia():
                 originale(self, {}, label="Patch applicate...",
                           command=lambda: _finestra(self.master))
                 fatto["si"] = True
-                tk.Menu.add_command = originale     # il trucco finisce qui
+                # ⛔ NON si rimette a posto `tk.Menu.add_command`.
+                # Sembrava pulito ("il trucco finisce qui") ed era un errore:
+                # se un'altra patch ha messo la SUA intercettazione dopo la
+                # nostra, ripristinare il metodo originale cancella anche
+                # quella. E' successo con la 010 (il tasto destro sui
+                # preferiti): il menu Extra si costruisce all'avvio, qui si
+                # trovava "Aggiorna", si ripristinava, e la 010 spariva prima
+                # ancora che l'utente aprisse un preferito.
+                # Basta il segnale `fatto`: da qui in poi questa funzione lascia
+                # passare tutto senza toccare niente, e la catena resta intera.
             except Exception:
                 pass
         return esito
