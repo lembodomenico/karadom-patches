@@ -4,6 +4,7 @@
     "003_trial_orologio_e_trova_file.py",
     "007_vedi_le_patch.py",
     "009_preferiti_si_indicizza_una_volta.py",
-    "010_tasto_destro_rilegge_il_disco.py"
+    "010_tasto_destro_rilegge_il_disco.py",
+    "012_barre_blu_notte.py"
   ]
 }
