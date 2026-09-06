@@ -1351,6 +1351,27 @@ def _aggancia_tonalita_video(_sys14):
 
         _KD.play = _play_con_preestrazione
 
+        # --- allo stop BASS va fermato -------------------------------------
+        # ⚠️ Nello stop() il ramo del video azzera i flag e piu' sotto c'e' un
+        # "elif is_bass_audio" che con un video non viene MAI raggiunto:
+        # chiudendo il video, l'audio restava a suonare da solo.
+        _stop_orig = _KD.stop
+
+        def _stop_ferma_bass(self, *a, **kw):
+            try:
+                if self.is_bass_audio and self.bass_engine and self.engine.is_video:
+                    try:
+                        self.bass_engine.stop()
+                    except Exception:
+                        pass
+                    self.is_bass_audio = False
+                    self._video_pitch_active = False
+            except Exception:
+                pass
+            return _stop_orig(self, *a, **kw)
+
+        _KD.stop = _stop_ferma_bass
+
         # --- a VLC solo la velocita', mai il fattore dei semitoni -----------
         _rate_orig = _KD._apply_rate
 
