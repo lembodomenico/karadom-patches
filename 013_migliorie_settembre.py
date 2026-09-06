@@ -912,6 +912,13 @@ try:
             _init_originale = _classe.__init__
 
             def _init_blu(self, master=None, _orig=_init_originale, **kw):
+                # fg_mimetico: alcune scritte sono volutamente INVISIBILI,
+                # dello stesso colore del fondo, e servono solo da spaziatore
+                # (la seconda nota musicale della barra bassa). Se si cambia
+                # il fondo e non il testo, saltano fuori.
+                for _c in ('fg', 'foreground'):
+                    if str(kw.get(_c, '')).lower() in (_GRIGIO_BARRA, _GRIGIO_BOX):
+                        kw[_c] = _BLU_FONDO
                 nuovo = _colore_giusto(master, kw)
                 if nuovo:
                     if 'bg' in kw:
