@@ -6,6 +6,7 @@
     "009_preferiti_si_indicizza_una_volta.py",
     "010_tasto_destro_rilegge_il_disco.py",
     "012_barre_blu_notte.py",
-    "013_contrasto_bottoni_player.py"
+    "013_contrasto_bottoni_player.py",
+    "014_ricerca_per_tipo_e_barra_linux.py"
   ]
 }
