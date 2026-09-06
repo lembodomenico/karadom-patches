@@ -82,6 +82,11 @@
 #     video RALLENTAVA senza cambiare tono. Ora l'audio si estrae appena
 #     parte il brano e la tonalita' la fa MPV, come sugli mp3.
 
+#
+# 15. SU YOUTUBE SI SCEGLIE MP4 O MP3 - nei risultati c'era un bottone
+#     solo, "Download MP4": per una base serve spesso il solo audio, e
+#     scaricare il video per poi buttarlo e' tempo e spazio sprecati.
+
 import sys
 import tkinter as tk
 
@@ -1592,3 +1597,190 @@ try:
                   name="TonalitaVideo013").start()
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, tonalita' video non agganciata: %s" % _e)
+
+
+# ==========================================================================
+# 15. SU YOUTUBE SI SCEGLIE MP4 O MP3
+# ==========================================================================
+# Nella scheda di ogni risultato c'era un bottone solo, "Download MP4". Per
+# farne una base serve spesso il solo audio: si affianca "MP3", che prende la
+# traccia migliore e la converte con ffmpeg (niente video scaricato e buttato).
+#
+# ⚠️ Il codice del download gira DENTRO il modulo yt2mp3 (exec nel suo
+# __dict__): usa nomi suoi — _dep, _YT_FORMAT_DL, _YT_PLAYER_CLIENT, messagebox,
+# la funzione di traduzione — che nel namespace della patch non esistono.
+
+_KD_DOWNLOAD = r'''
+def _kd_download_thread(self, url, cartella, formato=None):
+    formato = formato or getattr(self, '_kd_formato', 'mp4')
+    yt_dlp_exe = _dep("yt-dlp.exe")
+    ffmpeg_loc = _dep("ffmpeg.exe")
+    ffprobe_loc = _dep("ffprobe.exe")
+    for path, nome in ((yt_dlp_exe, "yt-dlp.exe"), (ffmpeg_loc, "ffmpeg.exe"), (ffprobe_loc, "ffprobe.exe")):
+        if not os.path.exists(path):
+            self.root.after(0, self._chiudi_progresso)
+            self.root.after(50, lambda n=nome: messagebox.showerror(
+                _("Errore"), _("{n} non trovato nella cartella dipendenze!").format(n=n), parent=self.root))
+            return
+
+    output_template = os.path.join(cartella, "%(title)s.%(ext)s")
+    # Anti-bot come lo streaming desktop: client web_safari/tv + deno per la
+    # sfida JS (evita "Sign in to confirm you're not a bot"). Vedi youtube_local.
+    deno = None
+    supporta_rc = False
+    try:
+        from .youtube_local import _deno_exe, _ytdlp_supports
+        deno = _deno_exe()
+        if deno:
+            supporta_rc = _ytdlp_supports(yt_dlp_exe, "--remote-components")
+    except Exception:
+        deno = None
+    js = ["--js-runtimes", "deno:" + deno] if deno else []
+    # con deno, i solver EJS aggiornati da GitHub: senza, "n challenge solving failed"
+    # e meta' dei formati sparisce. Il flag si passa SOLO se questo exe lo conosce.
+    if supporta_rc:
+        js += ["--remote-components", "ejs:github"]
+    antibot = ["--extractor-args", "youtube:player_client=" + _YT_PLAYER_CLIENT]
+
+    if formato == 'mp3':
+        # Solo audio: si prende la traccia migliore e la si converte in MP3
+        # con ffmpeg. Niente "--merge-output-format mp4", che qui non ha
+        # senso e farebbe uscire un contenitore video vuoto.
+        scelta = [
+            "-f", "bestaudio/best",
+            "-x", "--audio-format", "mp3", "--audio-quality", "0",
+        ]
+    else:
+        scelta = [
+            "-f", _YT_FORMAT_DL,
+            "--merge-output-format", "mp4",
+        ]
+
+    args = [
+        yt_dlp_exe, *js, *antibot,
+        *scelta,
+        "--ffmpeg-location", ffmpeg_loc,
+        "--no-mtime",
+        "-o", output_template,
+        url,
+    ]
+    files_before = set(os.listdir(cartella)) if os.path.exists(cartella) else set()
+    try:
+        proc = subprocess.Popen(
+            args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace',
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
+        pat = re.compile(r"\[download\]\s+([\d.]+)%")
+        for line in proc.stdout:
+            m = pat.search(line)
+            if m:
+                try:
+                    self._aggiorna_progresso(float(m.group(1)))
+                except Exception:
+                    pass
+        proc.wait()
+        exit_code = proc.returncode
+    except Exception as e:
+        self.root.after(0, self._chiudi_progresso)
+        self.root.after(50, lambda: messagebox.showerror(
+            _("Errore"), _("Errore esecuzione yt-dlp:") + f"\n{e}", parent=self.root))
+        return
+
+    if exit_code != 0:
+        self.root.after(0, self._chiudi_progresso)
+        self.root.after(50, lambda: messagebox.showerror(
+            _("Errore"), _("yt-dlp ha restituito un errore (exit code: {c})").format(c=exit_code),
+            parent=self.root))
+        return
+
+    time.sleep(1.5)
+    new_files = set(os.listdir(cartella)) - files_before
+    for f in list(new_files):
+        if f.lower().endswith(".mhtml"):
+            try:
+                os.remove(os.path.join(cartella, f))
+            except Exception:
+                pass
+    mp4 = [os.path.join(cartella, f) for f in new_files
+           if f.lower().endswith(".mp4")]
+    self.root.after(0, self._chiudi_progresso)
+    if not mp4:
+        self.root.after(50, lambda: messagebox.showwarning(
+            _("Attenzione"), _("Download finito ma nessun MP4 trovato."), parent=self.root))
+        return
+    finale = max(mp4, key=os.path.getmtime)
+    # cosi' il bottone "Trova il file" sa esattamente quale file aprire
+    try:
+        self._scaricati[url] = finale
+    except Exception:
+        pass
+    size_mb = os.path.getsize(finale) / (1024 * 1024)
+    self.root.after(50, lambda f=os.path.basename(finale), s=size_mb, p=finale: messagebox.showinfo(
+        _("✅ Download completato"),
+        _("Video scaricato:\n{f}\n\nDimensione: {s:.2f} MB\n\nPercorso:\n{p}").format(f=f, s=s, p=p),
+        parent=self.root))
+'''
+
+try:
+    import tkinter as _tk15
+    from moduli import yt2mp3 as _yt15
+
+    # ⚠️ Se il programma ha GIA' la scelta MP4/MP3 (compilato nuovo), qui non
+    # si tocca niente: la patch aggancerebbe _scarica a _scarica_mp4, che nel
+    # codice nuovo richiama _scarica -> giro infinito.
+    if (not getattr(_yt15.YoutubePanel, '_scelta_mp4_mp3', False)
+            and not hasattr(_yt15.YoutubePanel, '_scarica')):
+
+        # il download che sa fare anche il solo audio
+        exec(compile(_KD_DOWNLOAD, '<patch 013 punto 15>', 'exec'), _yt15.__dict__)
+        _yt15.YoutubePanel._download_thread = _yt15.__dict__['_kd_download_thread']
+
+        _scarica_orig = _yt15.YoutubePanel._scarica_mp4
+
+        def _scarica(self, url, formato='mp4', _orig=_scarica_orig):
+            """Ricorda il formato scelto e riusa il percorso gia' esistente."""
+            self._kd_formato = formato
+            return _orig(self, url)
+
+        _yt15.YoutubePanel._scarica = _scarica
+
+        def _card_con_mp3(self, host, url, thumb, title, row, col, wl,
+                          _orig=_yt15.YoutubePanel._card_risultato):
+            _orig(self, host, url, thumb, title, row, col, wl)
+            try:
+                _aggiungi_bottone_mp3(self, host, url)
+            except Exception as e:
+                print("\u26A0\uFE0F bottone MP3 non aggiunto: %s" % e)
+
+        def _aggiungi_bottone_mp3(pannello, host, url):
+            """Trova il bottone 'Download MP4' appena creato e gli affianca MP3."""
+            def cerca(w):
+                for c in w.winfo_children():
+                    try:
+                        if isinstance(c, _tk15.Button) and 'MP4' in str(c.cget('text')):
+                            return c
+                    except Exception:
+                        pass
+                    trovato = cerca(c)
+                    if trovato is not None:
+                        return trovato
+                return None
+
+            b_mp4 = cerca(host)
+            if b_mp4 is None:
+                return
+            b_mp4.configure(text="\U0001F3AC MP4")
+            padre = b_mp4.master
+            b_mp3 = _tk15.Button(padre, text="\U0001F3B5 MP3",
+                                 command=lambda u=url: pannello._scarica(u, 'mp3'),
+                                 bg='#e67e22', fg='white',
+                                 font=b_mp4.cget('font'),
+                                 relief='flat', cursor='hand2',
+                                 width=b_mp4.cget('width'))
+            b_mp3.pack(side='top', pady=(0, 6), fill='x', after=b_mp4)
+
+        _yt15.YoutubePanel._card_risultato = _card_con_mp3
+        _yt15.YoutubePanel._scelta_mp4_mp3 = True
+        print("\U0001F3B5 YouTube: si sceglie MP4 o MP3")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, scelta MP4/MP3 non aggiunta: %s" % _e)
