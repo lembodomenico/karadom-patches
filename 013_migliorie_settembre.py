@@ -899,11 +899,8 @@ try:
                 return _BLU_BOX
             if sfondo == _GRIGIO_BARRA and _e_blu(master):
                 return _BLU_FONDO
-            if sfondo == '#000000' and _e_blu(master):
-                # i bottoni della barra avevano il fondo nero: con la
-                # barra grigia non si notava, sul blu notte diventa un
-                # riquadro scuro attorno a ogni icona
-                return _BLU_FONDO
+            # NB: i bottoni restano col fondo NERO. Provato a portarli al blu
+            # notte: sparivano dentro la barra, il contrasto serve.
             if sfondo in _GRIGI_BOTTONE and _e_blu(master):
                 return _BLU_BOX
             return None
