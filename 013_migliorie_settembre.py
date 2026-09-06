@@ -51,7 +51,7 @@
 #       Button width=12   154x39    104x35    106x35
 
 #
-#  9. MONITOR PUBBLICO SENZA CONTATORI (solo Linux) — orologio, Elapsed,
+#  9. MONITOR PUBBLICO SENZA CONTATORI (Windows e Linux) — orologio, Elapsed,
 #     Total, CountDown, Signature e Current servono a chi suona, non a chi
 #     guarda. Sul monitor
 #     rivolto al pubblico la barra non si mostra piu': la gente deve vedere le
@@ -79,6 +79,12 @@
 # 13. LO SPLASH DELLA PROVA STA DENTRO LO SCHERMO - era alto 880 px fissi:
 #     su un portatile 1366x768 il fondo (bottone della prova, codice
 #     licenza) finiva sotto il bordo e non si poteva raggiungere.
+
+#
+# 14. TONALITA' VERA SUI VIDEO - VLC non sa trasporre (ha solo la
+#     velocita'): il fattore dei semitoni finiva dentro set_rate e il
+#     video RALLENTAVA senza cambiare tono. Ora l'audio si estrae appena
+#     parte il brano e la tonalita' la fa MPV, come sugli mp3.
 
 import sys
 import tkinter as tk
@@ -841,21 +847,38 @@ if sys.platform.startswith('linux'):
 try:
     from moduli import monitor as _mon
 
-    if (sys.platform.startswith('linux')
-            and not getattr(_mon.KaraokeMonitor, '_barra_via_dal_pubblico', False)):
+    if not getattr(_mon.KaraokeMonitor, '_barra_via_dal_pubblico', False):
         _crea_originale = _mon.KaraokeMonitor._create_widgets
 
         def _crea_senza_barra(self):
             _crea_originale(self)
             try:
-                # SOLO Linux: su Windows il monitor pubblico resta com'era
-                if (getattr(self, 'monitor_type', 'main') == 'pub'
-                        and sys.platform.startswith('linux')):
+                # Su OGNI piattaforma: quella barra serve a chi suona, non a
+                # chi guarda. Sullo schermo del pubblico ci devono essere le
+                # parole, non l'orologio.
+                if getattr(self, 'monitor_type', 'main') == 'pub':
                     self.info_bar.pack_forget()
             except Exception:
                 pass
 
         _mon.KaraokeMonitor._create_widgets = _crea_senza_barra
+
+        # Uscendo dalla modalita' espansa la barra veniva ri-aggiunta al
+        # layout: sul monitor pubblico sarebbe riapparsa.
+        _exp_originale = getattr(_mon.KaraokeMonitor, 'toggle_expanded', None)
+        if _exp_originale is not None:
+
+            def _toggle_expanded_senza_barra(self, *a, **kw):
+                r = _exp_originale(self, *a, **kw)
+                try:
+                    if getattr(self, 'monitor_type', 'main') == 'pub':
+                        self.info_bar.pack_forget()
+                except Exception:
+                    pass
+                return r
+
+            _mon.KaraokeMonitor.toggle_expanded = _toggle_expanded_senza_barra
+
         _mon.KaraokeMonitor._barra_via_dal_pubblico = True
         print("\U0001F4FA Monitor pubblico: via orologio e contatori")
 except Exception as _e:
@@ -1327,3 +1350,202 @@ try:
         print("\U0001F4D0 Splash della prova: sta nello schermo, seriale leggibile")
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, splash non adattato: %s" % _e)
+
+
+# ==========================================================================
+# 14. TONALITA' DEI VIDEO GESTITA DA BASS, COME GLI MP3
+# ==========================================================================
+# Sugli MP3 la tonalita' e' giusta: BASS alza la frequenza (FREQ) e SoundTouch
+# ricompensa la durata (TEMPO), quindi cambia il TONO e non la velocita'.
+#
+# Sui VIDEO l'audio lo suonava VLC, che NON sa trasporre: espone solo set_rate,
+# cioe' la velocita'. Il codice ci moltiplicava dentro il fattore dei semitoni
+# (a -2 semitoni: 0,891) e il video andava all'89%: rallentato, e la tonalita'
+# non cambiava affatto.
+#
+# Adesso l'audio del video lo prende in carico BASS, lo stesso motore degli
+# MP3: stessa resa, stesso comportamento, tonalita' in SEMITONI interi.
+#   1) l'audio si estrae appena parte il brano, non al primo tocco del tono
+#      (prima, per tutta l'estrazione, si sentiva il rallentamento);
+#   2) quando serve il tono: BASS suona l'audio estratto e VLC resta muto,
+#      a fare solo l'immagine;
+#   3) a VLC va SOLO la velocita', mai il fattore dei semitoni, cosi'
+#      l'immagine resta sincronizzata con quello che si sente;
+#   4) tornando a tonalita' 0, BASS si ferma e l'audio torna a VLC.
+# Se BASS non c'e', si ripiega su MPV (rubberband) come prima.
+
+try:
+    import os as _os14
+    import threading as _th14
+    from moduli import system as _sys14
+
+    _KD = getattr(_sys14, 'KaraokeMonitorSystem', None)
+    if _KD is None:
+        for _n in dir(_sys14):
+            _c = getattr(_sys14, _n)
+            if isinstance(_c, type) and hasattr(_c, '_apply_rate') and hasattr(_c, 'set_pitch'):
+                _KD = _c
+                break
+
+    if _KD is not None and not getattr(_KD, '_tonalita_video_vera', False):
+
+        # --- l'audio del video si estrae subito, per farsi trovare pronti ----
+        def _preestrai_audio_video(self):
+            try:
+                if not self.engine.is_video or not self.current_file:
+                    return
+                if self._video_audio_extracted and _os14.path.exists(self._video_audio_extracted):
+                    return
+                _file = self.current_file
+
+                def _bg():
+                    try:
+                        estratto = self._extract_video_audio(_file)
+                        if estratto and _os14.path.exists(estratto):
+                            if self.current_file == _file:   # brano non cambiato
+                                self._video_audio_extracted = estratto
+                                print("\U0001F3AC Audio del video pronto per la tonalita'")
+                    except Exception as e:
+                        print("\u26A0\uFE0F pre-estrazione audio video: %s" % e)
+
+                _th14.Thread(target=_bg, daemon=True).start()
+            except Exception as e:
+                print("\u26A0\uFE0F pre-estrazione non avviata: %s" % e)
+
+        _KD._preestrai_audio_video = _preestrai_audio_video
+
+        # --- l'audio estratto lo suona BASS, come un MP3 --------------------
+        def _audio_video_su_bass(self):
+            try:
+                from moduli.bass_engine import is_bass_available, get_bass_engine
+            except Exception:
+                return False
+            if not is_bass_available():
+                return False
+            try:
+                _be = get_bass_engine()
+                if not _be.initialized:
+                    _be.initialize()
+                if not _be.initialized or not _be.load(self._video_audio_extracted):
+                    return False
+
+                pos_ms = max(0, self.engine.vlc_player.get_time())
+
+                self.engine.vlc_player.audio_set_mute(True)
+                if self.engine.vlc_player_pubblico:
+                    try:
+                        self.engine.vlc_player_pubblico.audio_set_mute(True)
+                    except Exception:
+                        pass
+
+                self.bass_engine = _be
+                self.is_bass_audio = True
+                self.is_mpv_audio = False
+                self._video_pitch_active = True
+
+                _be.play()
+                _be.seek_ms(pos_ms)
+                try:
+                    _be.set_volume(int(max(0, min(127, self._user_volume * 127))))
+                except Exception:
+                    pass
+                _be.set_pitch(self.current_pitch)
+                _be.set_speed(max(0.25, min(4.0, self.current_speed)))
+                print("\U0001F3AC Audio del video su BASS: tonalita' %+d, posizione %dms"
+                      % (self.current_pitch, pos_ms))
+                return True
+            except Exception as e:
+                print("\u26A0\uFE0F audio del video su BASS non riuscito: %s" % e)
+                return False
+
+        _KD._audio_video_su_bass = _audio_video_su_bass
+
+        # prima BASS, poi MPV
+        _finish_orig = _KD._finish_activate_video_mpv
+
+        def _finish_bass_o_mpv(self):
+            try:
+                if (self.is_playing and self.engine.is_video
+                        and self._video_audio_extracted
+                        and _os14.path.exists(self._video_audio_extracted)
+                        and self._audio_video_su_bass()):
+                    return
+            except Exception as e:
+                print("\u26A0\uFE0F BASS per il video: %s" % e)
+            return _finish_orig(self)
+
+        _KD._finish_activate_video_mpv = _finish_bass_o_mpv
+
+        # tornando a tonalita' 0, BASS va fermato o resta a suonare sotto
+        _deact_orig = _KD._deactivate_video_mpv_audio
+
+        def _deact_anche_bass(self):
+            try:
+                if self.is_bass_audio and self.bass_engine and self.engine.is_video:
+                    try:
+                        self.bass_engine.stop()
+                    except Exception:
+                        pass
+                    self.is_bass_audio = False
+            except Exception:
+                pass
+            return _deact_orig(self)
+
+        _KD._deactivate_video_mpv_audio = _deact_anche_bass
+
+        # --- l'estrazione parte insieme al video ----------------------------
+        _play_orig = _KD.play
+
+        def _play_con_preestrazione(self, *a, **kw):
+            r = _play_orig(self, *a, **kw)
+            try:
+                if self.engine.is_video and not self.is_midi:
+                    self.master.after(800, self._preestrai_audio_video)
+            except Exception:
+                pass
+            return r
+
+        _KD.play = _play_con_preestrazione
+
+        # --- a VLC solo la velocita', mai il fattore dei semitoni -----------
+        _rate_orig = _KD._apply_rate
+
+        def _apply_rate_corretto(self):
+            r = _rate_orig(self)
+            try:
+                if not (self.engine.is_video and self.engine.vlc_player):
+                    return r
+                if not (self.is_playing or self.is_paused):
+                    return r
+                speed = max(0.25, min(4.0, self.current_speed))
+
+                if self._video_pitch_active:
+                    # audio su BASS/MPV: _apply_rate potrebbe essere uscita
+                    # prima di arrivare a VLC (ramo BASS con return)
+                    self.engine.vlc_player.set_rate(speed)
+                    if self.engine.vlc_player_pubblico:
+                        try:
+                            self.engine.vlc_player_pubblico.set_rate(speed)
+                        except Exception:
+                            pass
+                elif self.current_pitch != 0:
+                    # _apply_rate ha appena messo pitch_factor*speed: si rimette
+                    # la sola velocita' e si accende il motore della tonalita'
+                    self.engine.vlc_player.set_rate(speed)
+                    if self.engine.vlc_player_pubblico:
+                        try:
+                            self.engine.vlc_player_pubblico.set_rate(speed)
+                        except Exception:
+                            pass
+                    print("\U0001F3AC VLC video: velocita' %.3f, tonalita' in arrivo" % speed)
+                    if not self.is_midi:
+                        self._activate_video_mpv_audio()
+            except Exception as e:
+                print("\u26A0\uFE0F tonalita' video: %s" % e)
+            return r
+
+        _KD._apply_rate = _apply_rate_corretto
+        _KD._tonalita_video_vera = True
+        print("\U0001F3B5 Video: tonalita' in semitoni con BASS, come gli MP3")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, tonalita' video non corretta: %s" % _e)
