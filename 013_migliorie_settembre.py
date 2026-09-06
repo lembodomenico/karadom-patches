@@ -1471,6 +1471,57 @@ def _aggancia_tonalita_video(_sys14):
 
         _KD._extract_video_audio = _kd_extract_video_audio
 
+        # --- dopo un MIDI, il video non cambiava tonalita' -----------------
+        # I flag del brano precedente (is_midi, is_bass_audio) erano azzerati
+        # SOLO nel ramo "non video" di load_file: caricando un video restavano
+        # accesi. Con is_midi=True set_pitch non da' l'audio del video a BASS,
+        # e il tono non cambia. Sintomo: suoni un MIDI, poi un video, e il
+        # pitch non funziona finche' non passi da un mp3.
+        _load_orig = _KD.load_file
+
+        def _kd_load_file(self, *a, **kw):
+            r = _load_orig(self, *a, **kw)
+            try:
+                if getattr(self.engine, 'is_video', False):
+                    if self.is_midi or self.is_bass_audio:
+                        print("🎬 Video: azzerati i flag del brano precedente")
+                    self.is_midi = False
+                    self.is_bass_audio = False
+                    self.is_cdg = False
+            except Exception:
+                pass
+            return r
+
+        _KD.load_file = _kd_load_file
+
+        # --- il fade out deve spegnere anche BASS ---------------------------
+        # Nel fade del video si sfumavano VLC e MPV: BASS non era previsto,
+        # perche' prima l'audio del video non ci passava mai. Risultato: il
+        # video si fermava e la musica restava a suonare.
+        _fade_orig = _KD.fade_out
+
+        def _kd_fade_out(self, *a, **kw):
+            r = _fade_orig(self, *a, **kw)
+            try:
+                if self.is_bass_audio and self.bass_engine:
+                    try:
+                        self.bass_engine.stop()
+                    except Exception:
+                        pass
+                    try:
+                        self.bass_engine.set_volume(
+                            int(max(0, min(127, self._user_volume * 127))))
+                    except Exception:
+                        pass
+                    self.is_bass_audio = False
+                    self._video_pitch_active = False
+                    print("🎬 Fade out: fermato anche l'audio su BASS")
+            except Exception as e:
+                print("⚠️ fade out, BASS non fermato: %s" % e)
+            return r
+
+        _KD.fade_out = _kd_fade_out
+
         # --- l'audio estratto lo suona BASS, come un MP3 --------------------
         def _audio_video_su_bass(self):
             try:
