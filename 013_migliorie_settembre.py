@@ -88,6 +88,9 @@
 
 
 
+
+
+
 #
 # 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3 - per farne una base
 #     serve spesso il solo audio, e scaricare il video per poi buttarlo e'
@@ -1653,149 +1656,6 @@ except Exception as _e:
 
 
 # ==========================================================================
-# 16. I PRIMI 3 RISULTATI YOUTUBE SI PREPARANO DA SOLI
-# ==========================================================================
-# Premendo Play su un video YouTube il tempo se ne va quasi tutto nel ricavare
-# l'indirizzo del flusso: yt-dlp interroga YouTube e supera il controllo
-# anti-bot. MISURATO su un video vero: 6,6 secondi, e su linea lenta di piu'.
-#
-# Il brano non e' ancora stato scelto, ma i primi risultati sono quelli che si
-# scelgono quasi sempre: si risolvono in background mentre l'utente guarda
-# l'elenco, e l'indirizzo resta pronto per 2 ore (quelli di YouTube durano ~6).
-#
-# NON si scarica niente: sono richieste piccole, la banda resta libera per il
-# video — che e' il punto, dove la connessione e' lenta.
-# Misurato dopo: indirizzo gia' pronto, 0,0000s.
-
-_KD_PRONTI = r'''
-import threading as _thP
-import time as _tP
-
-_url_lock = _thP.Lock()
-_url_pronti = {}
-_url_in_corso = {}
-_URL_VALIDO_SEC = 2 * 3600
-
-
-def _url_in_cache(vid):
-    """Indirizzo gia' risolto e ancora buono, oppure None."""
-    import time as _t
-    with _url_lock:
-        dati = _url_pronti.get(vid)
-    if not dati:
-        return None
-    url, titolo, scade = dati
-    if _t.time() > scade:
-        with _url_lock:
-            _url_pronti.pop(vid, None)
-        return None
-    return url, titolo
-
-
-def prepara_risultati(urls, quanti=3):
-    """Risolve in anticipo l'indirizzo dei primi risultati di una ricerca.
-
-    PERCHE': quando si preme Play su un video YouTube, il tempo se ne va quasi
-    tutto in `risolvi_url` — yt-dlp deve interrogare YouTube e superare il
-    controllo anti-bot, e sono secondi (fino a 45 di timeout). Il video non e'
-    ancora stato scelto, ma i primi risultati sono quelli che si scelgono quasi
-    sempre: risolverli mentre l'utente guarda l'elenco fa trovare l'indirizzo
-    gia' pronto.
-
-    NON scarica niente: sono richieste piccole, non tocca la banda del video —
-    che e' il punto, su una connessione lenta.
-    """
-    import time as _t
-    for u in list(urls)[:max(0, int(quanti))]:
-        vid = _id_da(u)
-        if not vid or _url_in_cache(vid):
-            continue
-        with _url_lock:
-            t = _url_in_corso.get(vid)
-            if t is not None and t.is_alive():
-                continue
-
-        def _lavora(_vid=vid):
-            try:
-                url, titolo = risolvi_url(_vid)
-                if url:
-                    with _url_lock:
-                        _url_pronti[_vid] = (url, titolo, _t.time() + _URL_VALIDO_SEC)
-                    print("[YT-PRONTO] indirizzo gia' risolto per %s" % _vid)
-            except Exception as e:
-                print("[YT-PRONTO] %s non risolto: %s" % (_vid, e))
-
-        th = threading.Thread(target=_lavora, daemon=True, name="yt-pronto-%s" % vid)
-        with _url_lock:
-            _url_in_corso[vid] = th
-        th.start()
-'''
-
-try:
-    from moduli import youtube_local as _yl16
-
-    if not getattr(_yl16, '_primi_pronti', False):
-        # il codice gira DENTRO youtube_local: usa i suoi nomi (_id_da, risolvi_url)
-        exec(compile(_KD_PRONTI, '<patch 013 punto 16>', 'exec'), _yl16.__dict__)
-
-        # la riproduzione deve USARE l'indirizzo gia' pronto
-        _ripro_orig = _yl16.riproduci_youtube
-
-        def _riproduci_da_pronto(system, parent, video_id, tonalita=0,
-                                 ripiego_browser=None):
-            try:
-                vid = _yl16._id_da(video_id)
-                pronto = _yl16._url_in_cache(vid) if vid else None
-                if pronto:
-                    print("[YT] indirizzo gia' pronto: nessuna attesa")
-
-                    def _play():
-                        try:
-                            try:
-                                system.engine.yt_title = pronto[1]
-                            except Exception:
-                                pass
-                            if system.load_file(pronto[0], tonalita):
-                                system.play(tonalita)
-                            elif ripiego_browser:
-                                ripiego_browser()
-                        except Exception as e:
-                            print("[YT] partenza da indirizzo pronto fallita: %s" % e)
-                            _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
-
-                    try:
-                        parent.after(0, _play)
-                    except Exception:
-                        _play()
-                    return
-            except Exception as e:
-                print("[YT-PRONTO] %s" % e)
-            return _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
-
-        _yl16.riproduci_youtube = _riproduci_da_pronto
-
-        # e i primi 3 si preparano appena compaiono i risultati
-        from moduli import yt2mp3 as _yt16
-        _mostra_orig = _yt16.YoutubePanel._mostra_risultati
-
-        def _mostra_e_prepara(self, lista, _orig=_mostra_orig):
-            _orig(self, lista)
-            try:
-                # ogni risultato e' una tupla (url, miniatura, titolo)
-                urls = [r[0] for r in (self._results or [])[:3] if r and r[0]]
-                if urls:
-                    _yl16.prepara_risultati(urls, quanti=3)
-            except Exception as e:
-                print("[YT-PRONTO] non avviato: %s" % e)
-
-        _yt16.YoutubePanel._mostra_risultati = _mostra_e_prepara
-        _yl16._primi_pronti = True
-        print("\U0001F680 YouTube: i primi 3 risultati si preparano da soli")
-except Exception as _e:
-    print("\u26A0\uFE0F patch 013, preparazione dei risultati non attiva: %s" % _e)
-
-
-# ==========================================================================
 # 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3
 # ==========================================================================
 # Nei risultati c'era "Download MP4" e basta. Per farne una base karaoke serve
@@ -2106,42 +1966,67 @@ def _url_in_cache(vid):
 
 
 def prepara_risultati(urls, quanti=3):
-    """Risolve in anticipo l'indirizzo dei primi risultati di una ricerca.
+    """Risolve in anticipo l'indirizzo dei risultati di una ricerca.
 
-    PERCHE': quando si preme Play su un video YouTube, il tempo se ne va quasi
-    tutto in `risolvi_url` — yt-dlp deve interrogare YouTube e superare il
-    controllo anti-bot, e sono secondi (fino a 45 di timeout). Il video non e'
-    ancora stato scelto, ma i primi risultati sono quelli che si scelgono quasi
-    sempre: risolverli mentre l'utente guarda l'elenco fa trovare l'indirizzo
-    gia' pronto.
+    PERCHE': quando si preme Play su un video YouTube il tempo se ne va quasi
+    tutto in `risolvi_url` — yt-dlp interroga YouTube e supera il controllo
+    anti-bot: secondi (misurati 6,6 su un video vero, fino a 45 di timeout).
+    Risolvendoli mentre l'utente guarda l'elenco, l'indirizzo e' gia' pronto.
 
-    NON scarica niente: sono richieste piccole, non tocca la banda del video —
-    che e' il punto, su una connessione lenta.
+    `quanti` = quanti se ne preparano PER VOLTA, non in tutto: si lavora a
+    scaglioni, cosi' si preparano tutti senza aprire venti richieste insieme.
+    Appena uno finisce, parte il successivo.
+
+    NON scarica niente: sono richieste piccole e la banda resta libera per il
+    video — che e' il punto, su una connessione lenta.
     """
     import time as _t
-    for u in list(urls)[:max(0, int(quanti))]:
+
+    da_fare = []
+    for u in urls:
         vid = _id_da(u)
         if not vid or _url_in_cache(vid):
             continue
         with _url_lock:
-            t = _url_in_corso.get(vid)
-            if t is not None and t.is_alive():
+            in_corso = _url_in_corso.get(vid)
+            if in_corso is not None and in_corso.is_alive():
                 continue
+        if vid not in da_fare:
+            da_fare.append(vid)
+    if not da_fare:
+        return
 
-        def _lavora(_vid=vid):
+    coda = list(da_fare)
+    coda_lock = threading.Lock()
+
+    def _prendi():
+        with coda_lock:
+            return coda.pop(0) if coda else None
+
+    def _lavoratore():
+        while True:
+            vid = _prendi()
+            if vid is None:
+                return
             try:
-                url, titolo = risolvi_url(_vid)
+                url, titolo = risolvi_url(vid)
                 if url:
                     with _url_lock:
-                        _url_pronti[_vid] = (url, titolo, _t.time() + _URL_VALIDO_SEC)
-                    print("[YT-PRONTO] indirizzo gia' risolto per %s" % _vid)
+                        _url_pronti[vid] = (url, titolo, _t.time() + _URL_VALIDO_SEC)
+                    print("[YT-PRONTO] indirizzo gia' risolto per %s" % vid)
+                    _scalda(url)
             except Exception as e:
-                print("[YT-PRONTO] %s non risolto: %s" % (_vid, e))
+                print("[YT-PRONTO] %s non risolto: %s" % (vid, e))
 
-        th = threading.Thread(target=_lavora, daemon=True, name="yt-pronto-%s" % vid)
+    quanti = max(1, int(quanti))
+    for n in range(min(quanti, len(da_fare))):
+        th = threading.Thread(target=_lavoratore, daemon=True,
+                              name="yt-pronto-%d" % n)
         with _url_lock:
-            _url_in_corso[vid] = th
+            for vid in da_fare:
+                _url_in_corso.setdefault(vid, th)
         th.start()
+    print("[YT-PRONTO] %d da preparare, %d per volta" % (len(da_fare), quanti))
 '''
 
 try:
