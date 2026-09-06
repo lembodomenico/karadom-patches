@@ -865,6 +865,8 @@ except Exception as _e:
 
 _GRIGIO_FONDO = '#1a1a1a'
 _GRIGIO_BOX = '#2a2a2a'
+_GRIGIO_BARRA = '#2b2b2b'      # il fondo vero della barra bassa (misurato)
+_GRIGI_BOTTONE = ('#333', '#333333')
 _BLU_FONDO = '#060c1c'
 _BLU_BOX = '#132038'
 
@@ -873,19 +875,34 @@ try:
 
     if not getattr(tk.Frame, '_pannelli_blu_notte', False):
 
-        def _colore_giusto(kw):
+        def _e_blu(master):
+            """Vero se il contenitore e' la finestra principale o e' gia' blu
+            notte. Serve a NON toccare mixer, sampler e overlay: usano lo
+            stesso grigio ma vivono in finestre loro, e li' ci sta bene."""
+            try:
+                if isinstance(master, tk.Tk):
+                    return True
+                return str(master.cget('bg')).lower() in (_BLU_FONDO, _BLU_BOX)
+            except Exception:
+                return False
+
+        def _colore_giusto(master, kw):
             sfondo = str(kw.get('bg', kw.get('background', ''))).lower()
             if sfondo == _GRIGIO_FONDO:
                 return _BLU_FONDO
             if sfondo == _GRIGIO_BOX:
                 return _BLU_BOX
+            if sfondo == _GRIGIO_BARRA and _e_blu(master):
+                return _BLU_FONDO
+            if sfondo in _GRIGI_BOTTONE and _e_blu(master):
+                return _BLU_BOX
             return None
 
-        for _classe in (tk.Frame, tk.Label):
+        for _classe in (tk.Frame, tk.Label, tk.Button):
             _init_originale = _classe.__init__
 
             def _init_blu(self, master=None, _orig=_init_originale, **kw):
-                nuovo = _colore_giusto(kw)
+                nuovo = _colore_giusto(master, kw)
                 if nuovo:
                     if 'bg' in kw:
                         kw['bg'] = nuovo
@@ -895,9 +912,9 @@ try:
 
             _classe.__init__ = _init_blu
 
-        # ⚠️ I due pannelli sono GlowPanel: Canvas che RIDISEGNANO il fondo
-        # con il colore tenuto in self.inner. Cambiare solo il Frame interno
-        # non basta, al primo ridisegno torna grigio.
+        # I due pannelli al centro sono GlowPanel: Canvas che RIDISEGNANO il
+        # fondo con il colore tenuto in self.inner. Cambiare solo il Frame
+        # interno non basta, al primo ridisegno tornerebbe grigio.
         try:
             from moduli import glow_panel as _gp
             if not getattr(_gp.GlowPanel, '_blu_notte', False):
@@ -905,7 +922,7 @@ try:
 
                 def _glow_blu(self, master, *a, **kw):
                     dentro = str(kw.get('inner', '')).lower()
-                    if dentro == _GRIGIO_FONDO:
+                    if dentro in (_GRIGIO_FONDO, _GRIGIO_BARRA):
                         kw['inner'] = _BLU_FONDO
                     elif dentro == _GRIGIO_BOX:
                         kw['inner'] = _BLU_BOX
@@ -917,9 +934,9 @@ try:
             pass
 
         tk.Frame._pannelli_blu_notte = True
-        print("\U0001F311 Pannelli della barra bassa: blu notte")
+        print("🌑 Barra bassa: blu notte")
 except Exception as _e:
-    print("\u26A0\uFE0F patch 013, pannelli non ricolorati: %s" % _e)
+    print("⚠️ patch 013, pannelli non ricolorati: %s" % _e)
 
 
 # ==========================================================================
