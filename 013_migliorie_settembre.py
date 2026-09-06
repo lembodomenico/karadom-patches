@@ -56,6 +56,12 @@
 #     guarda. Sul monitor
 #     rivolto al pubblico la barra non si mostra piu': la gente deve vedere le
 #     parole.
+#
+# 10. VIA I SUONI DI SISTEMA DALLE FINESTRE DI AVVISO — le finestre di
+#     messaggio di Tk su Windows sono finestre del SISTEMA e il "ding" lo
+#     fa Windows: durante una serata si sente in sala. Sostituite con
+#     finestre nostre, che non suonano. Via anche il beep di Tk.
+
 import sys
 import tkinter as tk
 
@@ -836,3 +842,193 @@ try:
         print("\U0001F4FA Monitor pubblico: via orologio e contatori")
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, barra del monitor pubblico non tolta: %s" % _e)
+
+
+# ==========================================================================
+# 10. VIA I SUONI DI SISTEMA DALLE FINESTRE DI AVVISO
+# ==========================================================================
+# Le finestre di messaggio di Tk, su Windows, sono finestre del SISTEMA: il
+# "ding" non lo fa KaraDom, lo fa Windows in base all'icona, e non esiste
+# nessuna opzione per zittirlo. Durante una serata un errore che suona dentro
+# l'impianto si sente in sala.
+#
+# Qui si sostituiscono con finestre disegnate da noi, che non suonano perche'
+# sono normali finestre dell'applicazione. Le quasi 380 chiamate gia' scritte
+# nel programma non si toccano: si cambia il MODULO tkinter.messagebox, e
+# tutte le chiamate ci passano attraverso.
+#
+# Via anche il beep di Tk (tasto non valido, campo pieno).
+
+_AVVISI_MUTI = r'''
+import tkinter as tk
+
+# Colori: gli stessi della barra di KaraDom, cosi' gli avvisi non sembrano
+# finestre di un altro programma.
+_SFONDO   = '#141a26'
+_TESTO    = '#e8ebf2'
+_BORDO    = '#2a3446'
+_BOTTONE  = '#0078D7'
+_NEUTRO   = '#3a4152'
+
+# Un colore per tipo, al posto dell'icona di sistema
+_COLORI = {
+    'info':      '#4a9eff',
+    'warning':   '#e0a53c',
+    'error':     '#e05c5c',
+    'question':  '#4a9eff',
+}
+
+_originali = {}
+
+
+def _finestra(titolo, messaggio, tipo, bottoni, parent=None):
+    """Disegna la finestra e restituisce il bottone premuto (indice)."""
+    padre = parent
+    if padre is None:
+        padre = tk._default_root
+    if padre is None:                       # nessuna finestra: non c'e' modo
+        print("[%s] %s" % (titolo, messaggio))
+        return 0
+
+    win = tk.Toplevel(padre)
+    win.title(titolo or "")
+    win.configure(bg=_SFONDO, highlightthickness=1,
+                  highlightbackground=_BORDO, highlightcolor=_BORDO)
+    win.resizable(False, False)
+    win.transient(padre)
+
+    scelta = {'i': len(bottoni) - 1}        # chiudendo si sceglie l'ultimo
+
+    # striscia colorata a sinistra: dice il tipo senza l'icona di sistema
+    tk.Frame(win, bg=_COLORI.get(tipo, _COLORI['info']), width=4
+             ).pack(side='left', fill='y')
+
+    corpo = tk.Frame(win, bg=_SFONDO)
+    corpo.pack(side='left', fill='both', expand=True, padx=18, pady=16)
+
+    tk.Label(corpo, text=messaggio or "", bg=_SFONDO, fg=_TESTO,
+             font=('Segoe UI', 10), justify='left', wraplength=460
+             ).pack(anchor='w')
+
+    riga = tk.Frame(corpo, bg=_SFONDO)
+    riga.pack(anchor='e', pady=(16, 0))
+
+    def scegli(i):
+        scelta['i'] = i
+        try:
+            win.grab_release()
+        except Exception:
+            pass
+        win.destroy()
+
+    for i, (etichetta, principale) in enumerate(bottoni):
+        tk.Button(riga, text=etichetta,
+                  bg=(_BOTTONE if principale else _NEUTRO), fg='white',
+                  font=('Segoe UI', 10, 'bold' if principale else 'normal'),
+                  relief='flat', bd=0, cursor='hand2', width=10, pady=4,
+                  command=lambda n=i: scegli(n)
+                  ).pack(side='left', padx=(8, 0))
+
+    # Invio = primo bottone, Esc = ultimo (che di solito e' "No"/"Annulla")
+    win.bind('<Return>', lambda e: scegli(0))
+    win.bind('<Escape>', lambda e: scegli(len(bottoni) - 1))
+    win.protocol("WM_DELETE_WINDOW", lambda: scegli(len(bottoni) - 1))
+
+    # al centro della finestra che l'ha aperta
+    win.update_idletasks()
+    try:
+        x = padre.winfo_rootx() + (padre.winfo_width() - win.winfo_width()) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - win.winfo_height()) // 3
+        win.geometry("+%d+%d" % (max(0, x), max(0, y)))
+    except Exception:
+        pass
+
+    try:
+        win.grab_set()
+    except Exception:
+        pass
+    win.focus_force()
+    padre.wait_window(win)
+    return scelta['i']
+
+
+# ---------------------------------------------------------------- sostitute
+def showinfo(title=None, message=None, **kw):
+    _finestra(title, message, 'info', [("OK", True)], kw.get('parent'))
+    return "ok"
+
+
+def showwarning(title=None, message=None, **kw):
+    _finestra(title, message, 'warning', [("OK", True)], kw.get('parent'))
+    return "ok"
+
+
+def showerror(title=None, message=None, **kw):
+    _finestra(title, message, 'error', [("OK", True)], kw.get('parent'))
+    return "ok"
+
+
+def askyesno(title=None, message=None, **kw):
+    return _finestra(title, message, 'question',
+                     [("Sì", True), ("No", False)], kw.get('parent')) == 0
+
+
+def askokcancel(title=None, message=None, **kw):
+    return _finestra(title, message, 'question',
+                     [("OK", True), ("Annulla", False)], kw.get('parent')) == 0
+
+
+def askretrycancel(title=None, message=None, **kw):
+    return _finestra(title, message, 'warning',
+                     [("Riprova", True), ("Annulla", False)], kw.get('parent')) == 0
+
+
+def askquestion(title=None, message=None, **kw):
+    return "yes" if askyesno(title, message, **kw) else "no"
+
+
+def askyesnocancel(title=None, message=None, **kw):
+    i = _finestra(title, message, 'question',
+                  [("Sì", True), ("No", False), ("Annulla", False)], kw.get('parent'))
+    return True if i == 0 else (False if i == 1 else None)
+
+
+def _zittisci_avvisi():
+    """Sostituisce le finestre di messaggio di Tk con le nostre.
+
+    Si tocca il MODULO tkinter.messagebox, non le singole chiamate: i moduli
+    di KaraDom fanno 'from tkinter import messagebox' e poi 'messagebox.showinfo',
+    quindi guardano dentro il modulo ogni volta e prendono la nostra.
+    """
+    from tkinter import messagebox as _mb
+    if getattr(_mb, '_karadom_muto', False):
+        return False
+
+    nostre = {
+        'showinfo': showinfo, 'showwarning': showwarning, 'showerror': showerror,
+        'askyesno': askyesno, 'askokcancel': askokcancel,
+        'askretrycancel': askretrycancel, 'askquestion': askquestion,
+        'askyesnocancel': askyesnocancel,
+    }
+    for nome, funzione in nostre.items():
+        if hasattr(_mb, nome):
+            _originali[nome] = getattr(_mb, nome)
+            setattr(_mb, nome, funzione)
+
+    # il beep di Tk (tasto non valido, campo pieno): via anche quello
+    try:
+        tk.Misc.bell = lambda self, displayof=0: None
+    except Exception:
+        pass
+
+    _mb._karadom_muto = True
+    return True
+'''
+
+try:
+    _ns_avvisi = {}
+    exec(compile(_AVVISI_MUTI, '<patch 013 avvisi>', 'exec'), _ns_avvisi)
+    if _ns_avvisi['_zittisci_avvisi']():
+        print("\U0001F507 Avvisi: via il suono di sistema dalle finestre")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, avvisi non silenziati: %s" % _e)
