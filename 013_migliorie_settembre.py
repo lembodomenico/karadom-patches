@@ -38,12 +38,7 @@
 #     c'e' ancora; per la LETTURA si ricade sui percorsi noti, cosi'
 #     un'impostazione sbagliata non fa sparire un archivio esistente.
 #
-#  8. STRUMENTI -> RIAVVIA KARADOM — chiude e riapre solo l'applicazione.
-#     ⛔ Su Linux non basta rilanciare il programma: la sessione grafica
-#     dipende da lui, quindi chiudendolo si spegne anche X e resta lo schermo
-#     nero. Si passa da avvia_karadom.sh, staccato dal processo che esce.
-#
-#  9. FINESTRE PROPORZIONATE COME SU WINDOWS (solo Linux) — le finestre
+#  8. FINESTRE PROPORZIONATE COME SU WINDOWS (solo Linux) — le finestre
 #     secondarie uscivano piu' larghe. Non era il codice ne' lo scaling
 #     (schermo, DPI 120 e scaling Tk 1.6683 erano gia' identici): erano i
 #     valori predefiniti di Tk. Il font predefinito e' Segoe UI 9 su Windows
@@ -55,6 +50,12 @@
 #       Entry width=20    206 px    166 px    164 px
 #       Button width=12   154x39    104x35    106x35
 
+#
+#  9. MONITOR PUBBLICO SENZA CONTATORI (solo Linux) — orologio, Elapsed,
+#     Total, CountDown, Signature e Current servono a chi suona, non a chi
+#     guarda. Sul monitor
+#     rivolto al pubblico la barra non si mostra piu': la gente deve vedere le
+#     parole.
 import sys
 import tkinter as tk
 
@@ -777,75 +778,7 @@ except Exception as _e:
 
 
 # ==========================================================================
-# 8. STRUMENTI -> RIAVVIA KARADOM
-# ==========================================================================
-# La voce si aggiunge intercettando la creazione del menu: quando qualcuno
-# aggiunge "Riavvia PC", subito dopo si infila "Riavvia KaraDom". Cosi' non
-# serve ricostruire il menu ne' sapere come e' fatto.
-
-def _riavvia_karadom():
-    import os
-    import subprocess
-    import sys
-    import tkinter as tk
-    from tkinter import messagebox
-
-    radice = tk._default_root
-    if not messagebox.askyesno("Riavvia KaraDom",
-                               "Chiudere e riaprire KaraDom adesso?",
-                               parent=radice):
-        return
-    try:
-        if os.name == 'nt':
-            exe = sys.executable
-            if getattr(sys, 'frozen', False):
-                subprocess.Popen([exe] + sys.argv[1:], close_fds=True)
-            else:
-                subprocess.Popen([exe] + sys.argv, close_fds=True)
-        else:
-            # ⛔ chiudere KaraDom spegne anche X: si passa dallo script di
-            # sessione, staccato da questo processo che sta per morire
-            avvio = '/root/avvia_karadom.sh'
-            if os.path.exists(avvio):
-                subprocess.Popen(['setsid', '--fork', 'bash', '-c',
-                                  'sleep 2; exec </dev/tty1 >/dev/tty1 2>&1; %s' % avvio],
-                                 close_fds=True, start_new_session=True)
-            else:
-                subprocess.Popen(['setsid', sys.executable] + sys.argv,
-                                 close_fds=True, start_new_session=True)
-        if radice is not None:
-            radice.after(300, radice.destroy)
-    except Exception as e:
-        print("\u26A0\uFE0F Riavvio di KaraDom fallito: %s" % e)
-
-
-try:
-    import tkinter as tk
-
-    if not getattr(tk.Menu, '_voce_riavvia_karadom', False):
-        _menu_add = tk.Menu.add_command
-
-        def _menu_add_con_riavvia(self, cnf={}, **kw):
-            _menu_add(self, cnf, **kw)
-            try:
-                etichetta = str(kw.get('label', '') or (cnf or {}).get('label', ''))
-                if etichetta in ('Riavvia PC', 'Restart PC'):
-                    if not getattr(self, '_ha_riavvia_karadom', False):
-                        self._ha_riavvia_karadom = True
-                        _menu_add(self, {}, label="Riavvia KaraDom",
-                                  command=_riavvia_karadom)
-            except Exception:
-                pass
-
-        tk.Menu.add_command = _menu_add_con_riavvia
-        tk.Menu._voce_riavvia_karadom = True
-        print("\U0001F504 Menu Strumenti: aggiunta la voce 'Riavvia KaraDom'")
-except Exception as _e:
-    print("\u26A0\uFE0F patch 013, voce di menu non aggiunta: %s" % _e)
-
-
-# ==========================================================================
-# 9. FINESTRE PROPORZIONATE COME SU WINDOWS (solo Linux)
+# 8. FINESTRE PROPORZIONATE COME SU WINDOWS (solo Linux)
 # ==========================================================================
 if sys.platform.startswith('linux'):
     try:
@@ -868,3 +801,38 @@ if sys.platform.startswith('linux'):
         print("\U0001F4D0 Finestre: font e margini allineati a Windows")
     except Exception as _e:
         print("\u26A0\uFE0F patch 013, proporzioni non allineate: %s" % _e)
+
+
+# ==========================================================================
+# 9. MONITOR PUBBLICO SENZA OROLOGIO E CONTATORI
+# ==========================================================================
+# La barra con orologio, Elapsed, Total, CountDown, Signature e Current viene
+# creata dalla STESSA classe sia per la finestra di chi suona sia per il
+# monitor rivolto al pubblico (cambia solo monitor_type). Sul pubblico non
+# c'entra niente: si toglie dal layout.
+#
+# I widget continuano a esistere: decine di punti del codice ci scrivono
+# dentro, e non crearli vorrebbe dire rincorrere ogni singolo uso.
+
+try:
+    from moduli import monitor as _mon
+
+    if (sys.platform.startswith('linux')
+            and not getattr(_mon.KaraokeMonitor, '_barra_via_dal_pubblico', False)):
+        _crea_originale = _mon.KaraokeMonitor._create_widgets
+
+        def _crea_senza_barra(self):
+            _crea_originale(self)
+            try:
+                # SOLO Linux: su Windows il monitor pubblico resta com'era
+                if (getattr(self, 'monitor_type', 'main') == 'pub'
+                        and sys.platform.startswith('linux')):
+                    self.info_bar.pack_forget()
+            except Exception:
+                pass
+
+        _mon.KaraokeMonitor._create_widgets = _crea_senza_barra
+        _mon.KaraokeMonitor._barra_via_dal_pubblico = True
+        print("\U0001F4FA Monitor pubblico: via orologio e contatori")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, barra del monitor pubblico non tolta: %s" % _e)
