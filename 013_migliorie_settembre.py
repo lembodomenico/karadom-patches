@@ -63,6 +63,13 @@
 #     barre, ma i due pannelli al centro (Formato e Prossimo) restavano
 #     grigi: #1a1a1a il fondo, #2a2a2a i riquadri. Ora seguono le barre.
 
+#
+# 11. SUONI DI SISTEMA SPENTI MENTRE KARADOM E' APERTO (Windows) — il
+#     "ding" delle finestre di avviso lo fa Windows, non KaraDom, e in
+#     una serata finisce dentro l'impianto. Si spengono all'apertura e si
+#     rimettono alla chiusura; se KaraDom si chiude male, al primo avvio
+#     successivo si rimettono da soli.
+
 import sys
 import tkinter as tk
 
@@ -892,3 +899,173 @@ try:
         print("\U0001F311 Pannelli della barra bassa: blu notte")
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, pannelli non ricolorati: %s" % _e)
+
+
+# ==========================================================================
+# 11. SUONI DI SISTEMA SPENTI MENTRE KARADOM E' APERTO (solo Windows)
+# ==========================================================================
+# Le finestre di messaggio, su Windows, sono finestre del SISTEMA: il "ding"
+# lo fa Windows e non c'e' nessuna opzione per zittirlo dal programma.
+#
+# Si spegne il suono dei soli eventi di avviso all'apertura e lo si rimette
+# alla chiusura. Il resto del computer non viene toccato.
+#
+# ⚠️ Se KaraDom si chiude male i suoni resterebbero spenti: per questo i
+# valori di partenza si scrivono in un file, e al primo avvio successivo si
+# rimette tutto prima di rispegnere.
+
+_SUONI_SISTEMA = r'''
+import json
+import os
+import sys
+
+# Gli eventi che suonano nelle finestre di dialogo e negli avvisi. Non si
+# tocca tutto lo schema dei suoni: solo questi.
+_EVENTI = (
+    'SystemAsterisk',        # avviso / informazione
+    'SystemExclamation',     # attenzione
+    'SystemHand',            # errore grave
+    'SystemQuestion',        # domanda
+    'SystemNotification',    # notifica
+    'SystemDefault',         # il "beep" generico
+    'MenuCommand',
+    'MenuPopup',
+    'Open',
+    'Close',
+    'MailBeep',
+    'AppGPFault',
+)
+
+_CHIAVE = r'AppEvents\Schemes\Apps\.Default'
+
+
+def _file_ripristino():
+    base = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
+    return os.path.join(base, 'KaraDom', 'suoni_da_rimettere.json')
+
+
+def _attivo():
+    return os.name == 'nt' and sys.platform.startswith('win')
+
+
+def _leggi_e_svuota(winreg, evento, salvati):
+    """Legge il suono di un evento e lo svuota. Torna True se ha cambiato."""
+    percorso = '%s\\%s\\.Current' % (_CHIAVE, evento)
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, percorso, 0,
+                            winreg.KEY_READ | winreg.KEY_WRITE) as k:
+            try:
+                valore, tipo = winreg.QueryValueEx(k, '')
+            except FileNotFoundError:
+                return False
+            if not valore:                      # gia' muto
+                return False
+            salvati[evento] = {'v': valore, 't': tipo}
+            winreg.SetValueEx(k, '', 0, tipo, '')
+            return True
+    except FileNotFoundError:
+        return False                            # evento non presente su questo PC
+    except Exception:
+        return False
+
+
+def spegni():
+    """Spegne i suoni di sistema degli avvisi. Torna quanti ne ha spenti."""
+    if not _attivo():
+        return 0
+    import winreg
+
+    # Se c'e' un file di ripristino, l'ultima chiusura e' andata male:
+    # prima si rimette tutto a posto, poi si riparte da capo.
+    rimetti()
+
+    salvati = {}
+    for evento in _EVENTI:
+        _leggi_e_svuota(winreg, evento, salvati)
+
+    if not salvati:
+        return 0
+
+    percorso = _file_ripristino()
+    try:
+        os.makedirs(os.path.dirname(percorso), exist_ok=True)
+        with open(percorso, 'w', encoding='utf-8') as f:
+            json.dump(salvati, f)
+    except Exception as e:
+        # senza il file non si potrebbe rimettere a posto dopo un crash:
+        # meglio rinunciare che lasciare il computer muto per sempre
+        print('⚠️ Suoni di sistema: non riesco a salvare il ripristino (%s)' % e)
+        rimetti_da(salvati)
+        return 0
+
+    _avvisa_windows()
+    return len(salvati)
+
+
+def rimetti_da(salvati):
+    """Rimette i suoni indicati."""
+    if not _attivo() or not salvati:
+        return 0
+    import winreg
+    rimessi = 0
+    for evento, dati in salvati.items():
+        percorso = '%s\\%s\\.Current' % (_CHIAVE, evento)
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, percorso, 0,
+                                winreg.KEY_WRITE) as k:
+                winreg.SetValueEx(k, '', 0, dati.get('t', winreg.REG_EXPAND_SZ),
+                                  dati.get('v', ''))
+                rimessi += 1
+        except Exception:
+            pass
+    _avvisa_windows()
+    return rimessi
+
+
+def rimetti():
+    """Rimette i suoni salvati e cancella il file di ripristino."""
+    if not _attivo():
+        return 0
+    percorso = _file_ripristino()
+    if not os.path.exists(percorso):
+        return 0
+    try:
+        with open(percorso, encoding='utf-8') as f:
+            salvati = json.load(f)
+    except Exception:
+        salvati = {}
+    n = rimetti_da(salvati)
+    try:
+        os.remove(percorso)
+    except Exception:
+        pass
+    return n
+
+
+def _avvisa_windows():
+    """Dice a Windows di rileggere le impostazioni: senza, i programmi gia'
+    aperti continuano a usare i suoni di prima."""
+    try:
+        import ctypes
+        # SPI_SETSOUNDSENTRY non serve: basta la notifica di cambio impostazioni
+        ctypes.windll.user32.SendMessageTimeoutW(
+            0xFFFF,      # HWND_BROADCAST
+            0x001A,      # WM_SETTINGCHANGE
+            0, 0, 0x0002, 200, None)
+    except Exception:
+        pass
+'''
+
+if sys.platform.startswith('win'):
+    try:
+        _ns_suoni = {}
+        exec(compile(_SUONI_SISTEMA, '<patch 013 suoni>', 'exec'), _ns_suoni)
+        _n = _ns_suoni['spegni']()
+        if _n:
+            print("\U0001F507 Suoni di sistema spenti (%d), si rimettono alla chiusura" % _n)
+
+        # il ripristino si aggancia alla chiusura della finestra principale
+        import atexit
+        atexit.register(_ns_suoni['rimetti'])
+    except Exception as _e:
+        print("\u26A0\uFE0F patch 013, suoni di sistema non spenti: %s" % _e)
