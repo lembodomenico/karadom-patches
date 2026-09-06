@@ -82,10 +82,11 @@
 #     video RALLENTAVA senza cambiare tono. Ora l'audio si estrae appena
 #     parte il brano e la tonalita' la fa MPV, come sugli mp3.
 
+
 #
-# 15. SU YOUTUBE SI SCEGLIE MP4 O MP3 - nei risultati c'era un bottone
-#     solo, "Download MP4": per una base serve spesso il solo audio, e
-#     scaricare il video per poi buttarlo e' tempo e spazio sprecati.
+# 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3 - per farne una base
+#     serve spesso il solo audio, e scaricare il video per poi buttarlo e'
+#     tempo e spazio sprecati. Si sceglie in una finestrella.
 
 import sys
 import tkinter as tk
@@ -1600,17 +1601,24 @@ except Exception as _e:
 
 
 # ==========================================================================
-# 15. SU YOUTUBE SI SCEGLIE MP4 O MP3
+# 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3
 # ==========================================================================
-# Nella scheda di ogni risultato c'era un bottone solo, "Download MP4". Per
-# farne una base serve spesso il solo audio: si affianca "MP3", che prende la
-# traccia migliore e la converte con ffmpeg (niente video scaricato e buttato).
+# Nei risultati c'era "Download MP4" e basta. Per farne una base karaoke serve
+# spesso il solo audio: scaricare il video per poi buttarlo e' tempo e spazio
+# sprecati, e su una connessione lenta si aspetta per niente.
 #
-# ⚠️ Il codice del download gira DENTRO il modulo yt2mp3 (exec nel suo
-# __dict__): usa nomi suoi — _dep, _YT_FORMAT_DL, _YT_PLAYER_CLIENT, messagebox,
-# la funzione di traduzione — che nel namespace della patch non esistono.
+# Il bottone diventa "Download" e apre una finestrella con due scelte.
+#
+# ⚠️ NON si aggiungono bottoni alla scheda: la scheda viene RIDISEGNATA a ogni
+# ridimensionamento della finestra, e un bottone aggiunto si accumulerebbe a
+# ogni giro (provato: decine di "MP3" uno sotto l'altro). Si cambia il testo e
+# il comando di quello che c'e' gia'.
+#
+# ⚠️ Il codice gira DENTRO il modulo yt2mp3 (exec nel suo __dict__): usa nomi
+# suoi — _dep, _YT_FORMAT_DL, tk, S, F, messagebox, la traduzione — che nel
+# namespace della patch non esistono.
 
-_KD_DOWNLOAD = r'''
+_KD_YT = r'''
 def _kd_download_thread(self, url, cartella, formato=None):
     formato = formato or getattr(self, '_kd_formato', 'mp4')
     yt_dlp_exe = _dep("yt-dlp.exe")
@@ -1719,41 +1727,76 @@ def _kd_download_thread(self, url, cartella, formato=None):
         _("✅ Download completato"),
         _("Video scaricato:\n{f}\n\nDimensione: {s:.2f} MB\n\nPercorso:\n{p}").format(f=f, s=s, p=p),
         parent=self.root))
+
+
+def _kd_chiedi_e_scarica(self, url):
+    """Chiede il formato e scarica. Una finestrella, due bottoni."""
+    dlg = tk.Toplevel(self.root)
+    dlg.title(_("Come vuoi scaricarlo?"))
+    dlg.configure(bg='#1a1a2e')
+    dlg.transient(self.root)
+    dlg.resizable(False, False)
+
+    tk.Label(dlg, text=_("Cosa vuoi scaricare?"), bg='#1a1a2e', fg='white',
+             font=F('Segoe UI', 11, 'bold')).pack(padx=S(24), pady=(S(18), S(4)))
+    tk.Label(dlg, text=_("L'MP3 prende solo l'audio: piu' veloce e occupa molto meno."),
+             bg='#1a1a2e', fg='#9aa4bf', font=F('Segoe UI', 9),
+             wraplength=S(300)).pack(padx=S(24), pady=(0, S(14)))
+
+    def scegli(formato):
+        dlg.destroy()
+        self._scarica(url, formato)
+
+    riga = tk.Frame(dlg, bg='#1a1a2e')
+    riga.pack(padx=S(24), pady=(0, S(10)))
+    tk.Button(riga, text=_("🎬 MP4  (video)"), command=lambda: scegli('mp4'),
+              bg='#007bff', fg='white', font=F('Segoe UI', 10, 'bold'),
+              relief='flat', cursor='hand2', width=S(16), pady=S(6)).pack(side='left')
+    tk.Button(riga, text=_("🎵 MP3  (solo audio)"), command=lambda: scegli('mp3'),
+              bg='#e67e22', fg='white', font=F('Segoe UI', 10, 'bold'),
+              relief='flat', cursor='hand2', width=S(16), pady=S(6)).pack(side='left', padx=(S(8), 0))
+
+    tk.Button(dlg, text=_("Annulla"), command=dlg.destroy, bg='#33374d', fg='white',
+              font=F('Segoe UI', 9), relief='flat', cursor='hand2').pack(pady=(0, S(16)))
+
+    dlg.update_idletasks()
+    x = self.root.winfo_rootx() + (self.root.winfo_width() - dlg.winfo_width()) // 2
+    y = self.root.winfo_rooty() + (self.root.winfo_height() - dlg.winfo_height()) // 3
+    dlg.geometry(f"+{max(0, x)}+{max(0, y)}")
+    dlg.grab_set()
 '''
 
 try:
     import tkinter as _tk15
     from moduli import yt2mp3 as _yt15
 
-    # ⚠️ Se il programma ha GIA' la scelta MP4/MP3 (compilato nuovo), qui non
-    # si tocca niente: la patch aggancerebbe _scarica a _scarica_mp4, che nel
-    # codice nuovo richiama _scarica -> giro infinito.
+    # Se il programma ha GIA' la scelta (compilato nuovo) non si tocca niente.
     if (not getattr(_yt15.YoutubePanel, '_scelta_mp4_mp3', False)
-            and not hasattr(_yt15.YoutubePanel, '_scarica')):
+            and not hasattr(_yt15.YoutubePanel, '_chiedi_e_scarica')):
 
-        # il download che sa fare anche il solo audio
-        exec(compile(_KD_DOWNLOAD, '<patch 013 punto 15>', 'exec'), _yt15.__dict__)
+        exec(compile(_KD_YT, '<patch 013 punto 15>', 'exec'), _yt15.__dict__)
         _yt15.YoutubePanel._download_thread = _yt15.__dict__['_kd_download_thread']
+        _yt15.YoutubePanel._chiedi_e_scarica = _yt15.__dict__['_kd_chiedi_e_scarica']
 
-        _scarica_orig = _yt15.YoutubePanel._scarica_mp4
+        _scarica_orig_yt = _yt15.YoutubePanel._scarica_mp4
 
-        def _scarica(self, url, formato='mp4', _orig=_scarica_orig):
-            """Ricorda il formato scelto e riusa il percorso gia' esistente."""
+        def _scarica_yt(self, url, formato='mp4', _orig=_scarica_orig_yt):
+            """Ricorda il formato e riusa il percorso di download gia' esistente."""
             self._kd_formato = formato
             return _orig(self, url)
 
-        _yt15.YoutubePanel._scarica = _scarica
+        _yt15.YoutubePanel._scarica = _scarica_yt
 
-        def _card_con_mp3(self, host, url, thumb, title, row, col, wl,
-                          _orig=_yt15.YoutubePanel._card_risultato):
+        def _card_con_scelta(self, host, url, thumb, title, row, col, wl,
+                             _orig=_yt15.YoutubePanel._card_risultato):
             _orig(self, host, url, thumb, title, row, col, wl)
             try:
-                _aggiungi_bottone_mp3(self, host, url)
+                _cambia_bottone_download(self, host, url)
             except Exception as e:
-                print("\u26A0\uFE0F bottone MP3 non aggiunto: %s" % e)
+                print("\u26A0\uFE0F scelta del formato non agganciata: %s" % e)
 
-        def _aggiungi_bottone_mp3(pannello, host, url):
-            """Trova il bottone 'Download MP4' appena creato e gli affianca MP3."""
+        def _cambia_bottone_download(pannello, host, url):
+            """Il bottone 'Download MP4' diventa 'Download' e chiede il formato."""
             def cerca(w):
                 for c in w.winfo_children():
                     try:
@@ -1766,21 +1809,14 @@ try:
                         return trovato
                 return None
 
-            b_mp4 = cerca(host)
-            if b_mp4 is None:
+            b = cerca(host)
+            if b is None:
                 return
-            b_mp4.configure(text="\U0001F3AC MP4")
-            padre = b_mp4.master
-            b_mp3 = _tk15.Button(padre, text="\U0001F3B5 MP3",
-                                 command=lambda u=url: pannello._scarica(u, 'mp3'),
-                                 bg='#e67e22', fg='white',
-                                 font=b_mp4.cget('font'),
-                                 relief='flat', cursor='hand2',
-                                 width=b_mp4.cget('width'))
-            b_mp3.pack(side='top', pady=(0, 6), fill='x', after=b_mp4)
+            b.configure(text="\u2B07\uFE0F Download",
+                        command=lambda u=url: pannello._chiedi_e_scarica(u))
 
-        _yt15.YoutubePanel._card_risultato = _card_con_mp3
+        _yt15.YoutubePanel._card_risultato = _card_con_scelta
         _yt15.YoutubePanel._scelta_mp4_mp3 = True
-        print("\U0001F3B5 YouTube: si sceglie MP4 o MP3")
+        print("\U0001F3B5 YouTube: il Download chiede MP4 o MP3")
 except Exception as _e:
-    print("\u26A0\uFE0F patch 013, scelta MP4/MP3 non aggiunta: %s" % _e)
+    print("\u26A0\uFE0F patch 013, scelta del formato non aggiunta: %s" % _e)
