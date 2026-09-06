@@ -58,6 +58,11 @@
 #     parole.
 #
 
+#
+# 10. PANNELLI DELLA BARRA BASSA IN BLU NOTTE — la 012 aveva colorato le
+#     barre, ma i due pannelli al centro (Formato e Prossimo) restavano
+#     grigi: #1a1a1a il fondo, #2a2a2a i riquadri. Ora seguono le barre.
+
 import sys
 import tkinter as tk
 
@@ -838,3 +843,52 @@ try:
         print("\U0001F4FA Monitor pubblico: via orologio e contatori")
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, barra del monitor pubblico non tolta: %s" % _e)
+
+
+# ==========================================================================
+# 10. PANNELLI DELLA BARRA BASSA IN BLU NOTTE
+# ==========================================================================
+# La 012 ha portato al blu notte la barra dei menu e quella delle icone, ma i
+# due pannelli al centro della barra bassa (quello con Cantante/Brano e
+# "Formato", e quello di "Prossimo") erano rimasti grigi.
+#
+# Si interviene sulla creazione dei widget: quando nasce un Frame o una Label
+# con lo sfondo grigio dei pannelli, gli si mette il colore giusto. Non serve
+# sapere dove sono nel codice ne' quanti sono.
+
+_GRIGIO_FONDO = '#1a1a1a'
+_GRIGIO_BOX = '#2a2a2a'
+_BLU_FONDO = '#060c1c'
+_BLU_BOX = '#132038'
+
+try:
+    import tkinter as tk
+
+    if not getattr(tk.Frame, '_pannelli_blu_notte', False):
+
+        def _colore_giusto(kw):
+            sfondo = str(kw.get('bg', kw.get('background', ''))).lower()
+            if sfondo == _GRIGIO_FONDO:
+                return _BLU_FONDO
+            if sfondo == _GRIGIO_BOX:
+                return _BLU_BOX
+            return None
+
+        for _classe in (tk.Frame, tk.Label):
+            _init_originale = _classe.__init__
+
+            def _init_blu(self, master=None, _orig=_init_originale, **kw):
+                nuovo = _colore_giusto(kw)
+                if nuovo:
+                    if 'bg' in kw:
+                        kw['bg'] = nuovo
+                    if 'background' in kw:
+                        kw['background'] = nuovo
+                _orig(self, master, **kw)
+
+            _classe.__init__ = _init_blu
+
+        tk.Frame._pannelli_blu_notte = True
+        print("\U0001F311 Pannelli della barra bassa: blu notte")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, pannelli non ricolorati: %s" % _e)
