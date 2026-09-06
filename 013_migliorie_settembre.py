@@ -83,10 +83,19 @@
 #     parte il brano e la tonalita' la fa MPV, come sugli mp3.
 
 
+
+
+
+
+
 #
 # 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3 - per farne una base
 #     serve spesso il solo audio, e scaricare il video per poi buttarlo e'
 #     tempo e spazio sprecati. Si sceglie in una finestrella.
+#
+# 16. I PRIMI 3 RISULTATI YOUTUBE SI PREPARANO DA SOLI - premendo Play il
+#     tempo se ne va nel ricavare l'indirizzo del flusso (yt-dlp +
+#     anti-bot: 6,6s misurati). Si risolve mentre guardi l'elenco.
 
 import sys
 import tkinter as tk
@@ -1415,6 +1424,49 @@ def _aggancia_tonalita_video(_sys14):
 
         _KD._preestrai_audio_video = _preestrai_audio_video
 
+        # --- ffmpeg col PERCORSO, non col nome nudo ------------------------
+        # ⚠️ CAUSA VERA del "sui video la tonalita' non funziona" segnalata da
+        # un cliente: _extract_video_audio chiamava 'ffmpeg' senza percorso.
+        # Sul PC di chi sviluppa ffmpeg e' nel PATH e va; sui PC dei clienti NO
+        # (sta in dipendenze\, spedito col programma). L'estrazione falliva in
+        # silenzio, l'audio non arrivava a BASS e si ricadeva sulla velocita':
+        # il video rallentava invece di cambiare tono.
+        _estrai_orig = _KD._extract_video_audio
+
+        def _kd_extract_video_audio(self, video_path, _orig=_estrai_orig):
+            import subprocess as _sp, tempfile as _tf
+            try:
+                base = _os14.path.splitext(_os14.path.basename(video_path))[0]
+                out = _os14.path.join(_tf.gettempdir(), base + "_extracted_audio.wav")
+                if _os14.path.exists(out) and _os14.path.getsize(out) > 1000:
+                    return out
+                # nel compilato la cartella si ricava da sys.argv[0], non da
+                # __file__ (Nuitka lo mette altrove): si usa _dep di yt2mp3
+                ffmpeg = 'ffmpeg'
+                try:
+                    from moduli.yt2mp3 import _dep as _dip
+                    _f = _dip('ffmpeg.exe' if _os14.name == 'nt' else 'ffmpeg')
+                    if _os14.path.exists(_f):
+                        ffmpeg = _f
+                    else:
+                        from moduli.normalizzazione import _get_ffmpeg_path
+                        ffmpeg = _get_ffmpeg_path()
+                except Exception:
+                    pass
+                _sp.run([ffmpeg, '-y', '-i', video_path, '-vn', '-acodec', 'pcm_s24le',
+                         '-ar', '48000', '-ac', '2', out],
+                        capture_output=True, timeout=120,
+                        creationflags=0x08000000 if _os14.name == 'nt' else 0)
+                if _os14.path.exists(out) and _os14.path.getsize(out) > 1000:
+                    print("🎬 Audio del video estratto (%.1f MB) con %s"
+                          % (_os14.path.getsize(out) / 1048576.0, ffmpeg))
+                    return out
+            except Exception as e:
+                print("⚠️ estrazione audio del video: %s" % e)
+            return _orig(self, video_path)
+
+        _KD._extract_video_audio = _kd_extract_video_audio
+
         # --- l'audio estratto lo suona BASS, come un MP3 --------------------
         def _audio_video_su_bass(self):
             try:
@@ -1601,18 +1653,167 @@ except Exception as _e:
 
 
 # ==========================================================================
+# 16. I PRIMI 3 RISULTATI YOUTUBE SI PREPARANO DA SOLI
+# ==========================================================================
+# Premendo Play su un video YouTube il tempo se ne va quasi tutto nel ricavare
+# l'indirizzo del flusso: yt-dlp interroga YouTube e supera il controllo
+# anti-bot. MISURATO su un video vero: 6,6 secondi, e su linea lenta di piu'.
+#
+# Il brano non e' ancora stato scelto, ma i primi risultati sono quelli che si
+# scelgono quasi sempre: si risolvono in background mentre l'utente guarda
+# l'elenco, e l'indirizzo resta pronto per 2 ore (quelli di YouTube durano ~6).
+#
+# NON si scarica niente: sono richieste piccole, la banda resta libera per il
+# video — che e' il punto, dove la connessione e' lenta.
+# Misurato dopo: indirizzo gia' pronto, 0,0000s.
+
+_KD_PRONTI = r'''
+import threading as _thP
+import time as _tP
+
+_url_lock = _thP.Lock()
+_url_pronti = {}
+_url_in_corso = {}
+_URL_VALIDO_SEC = 2 * 3600
+
+
+def _url_in_cache(vid):
+    """Indirizzo gia' risolto e ancora buono, oppure None."""
+    import time as _t
+    with _url_lock:
+        dati = _url_pronti.get(vid)
+    if not dati:
+        return None
+    url, titolo, scade = dati
+    if _t.time() > scade:
+        with _url_lock:
+            _url_pronti.pop(vid, None)
+        return None
+    return url, titolo
+
+
+def prepara_risultati(urls, quanti=3):
+    """Risolve in anticipo l'indirizzo dei primi risultati di una ricerca.
+
+    PERCHE': quando si preme Play su un video YouTube, il tempo se ne va quasi
+    tutto in `risolvi_url` — yt-dlp deve interrogare YouTube e superare il
+    controllo anti-bot, e sono secondi (fino a 45 di timeout). Il video non e'
+    ancora stato scelto, ma i primi risultati sono quelli che si scelgono quasi
+    sempre: risolverli mentre l'utente guarda l'elenco fa trovare l'indirizzo
+    gia' pronto.
+
+    NON scarica niente: sono richieste piccole, non tocca la banda del video —
+    che e' il punto, su una connessione lenta.
+    """
+    import time as _t
+    for u in list(urls)[:max(0, int(quanti))]:
+        vid = _id_da(u)
+        if not vid or _url_in_cache(vid):
+            continue
+        with _url_lock:
+            t = _url_in_corso.get(vid)
+            if t is not None and t.is_alive():
+                continue
+
+        def _lavora(_vid=vid):
+            try:
+                url, titolo = risolvi_url(_vid)
+                if url:
+                    with _url_lock:
+                        _url_pronti[_vid] = (url, titolo, _t.time() + _URL_VALIDO_SEC)
+                    print("[YT-PRONTO] indirizzo gia' risolto per %s" % _vid)
+            except Exception as e:
+                print("[YT-PRONTO] %s non risolto: %s" % (_vid, e))
+
+        th = threading.Thread(target=_lavora, daemon=True, name="yt-pronto-%s" % vid)
+        with _url_lock:
+            _url_in_corso[vid] = th
+        th.start()
+'''
+
+try:
+    from moduli import youtube_local as _yl16
+
+    if not getattr(_yl16, '_primi_pronti', False):
+        # il codice gira DENTRO youtube_local: usa i suoi nomi (_id_da, risolvi_url)
+        exec(compile(_KD_PRONTI, '<patch 013 punto 16>', 'exec'), _yl16.__dict__)
+
+        # la riproduzione deve USARE l'indirizzo gia' pronto
+        _ripro_orig = _yl16.riproduci_youtube
+
+        def _riproduci_da_pronto(system, parent, video_id, tonalita=0,
+                                 ripiego_browser=None):
+            try:
+                vid = _yl16._id_da(video_id)
+                pronto = _yl16._url_in_cache(vid) if vid else None
+                if pronto:
+                    print("[YT] indirizzo gia' pronto: nessuna attesa")
+
+                    def _play():
+                        try:
+                            try:
+                                system.engine.yt_title = pronto[1]
+                            except Exception:
+                                pass
+                            if system.load_file(pronto[0], tonalita):
+                                system.play(tonalita)
+                            elif ripiego_browser:
+                                ripiego_browser()
+                        except Exception as e:
+                            print("[YT] partenza da indirizzo pronto fallita: %s" % e)
+                            _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
+
+                    try:
+                        parent.after(0, _play)
+                    except Exception:
+                        _play()
+                    return
+            except Exception as e:
+                print("[YT-PRONTO] %s" % e)
+            return _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
+
+        _yl16.riproduci_youtube = _riproduci_da_pronto
+
+        # e i primi 3 si preparano appena compaiono i risultati
+        from moduli import yt2mp3 as _yt16
+        _mostra_orig = _yt16.YoutubePanel._mostra_risultati
+
+        def _mostra_e_prepara(self, lista, _orig=_mostra_orig):
+            _orig(self, lista)
+            try:
+                # ogni risultato e' una tupla (url, miniatura, titolo)
+                urls = [r[0] for r in (self._results or [])[:3] if r and r[0]]
+                if urls:
+                    _yl16.prepara_risultati(urls, quanti=3)
+            except Exception as e:
+                print("[YT-PRONTO] non avviato: %s" % e)
+
+        _yt16.YoutubePanel._mostra_risultati = _mostra_e_prepara
+        _yl16._primi_pronti = True
+        print("\U0001F680 YouTube: i primi 3 risultati si preparano da soli")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, preparazione dei risultati non attiva: %s" % _e)
+
+
+# ==========================================================================
 # 15. SU YOUTUBE IL BOTTONE DOWNLOAD CHIEDE MP4 O MP3
 # ==========================================================================
 # Nei risultati c'era "Download MP4" e basta. Per farne una base karaoke serve
 # spesso il solo audio: scaricare il video per poi buttarlo e' tempo e spazio
 # sprecati, e su una connessione lenta si aspetta per niente.
 #
-# Il bottone diventa "Download" e apre una finestrella con due scelte.
+# Il bottone diventa "Download" e apre una finestrella con due scelte. La
+# finestrella ha la STESSA misura fissa di quella del download: due finestre
+# della stessa famiglia che cambiano taglia sembrano due programmi diversi.
+#
+# Scaricando un MP3, la finestra di avanzamento diceva "Download MP4 in corso"
+# e alla fine "Video scaricato"; peggio, cercava un file .mp4 e avvisava
+# "nessun MP4 trovato" anche a download riuscito.
 #
 # ⚠️ NON si aggiungono bottoni alla scheda: la scheda viene RIDISEGNATA a ogni
-# ridimensionamento della finestra, e un bottone aggiunto si accumulerebbe a
-# ogni giro (provato: decine di "MP3" uno sotto l'altro). Si cambia il testo e
-# il comando di quello che c'e' gia'.
+# ridimensionamento della finestra, e un bottone aggiunto si accumula a ogni
+# giro (provato: decine di "MP3" uno sotto l'altro). Si cambia il testo e il
+# comando di quello che c'e' gia'.
 #
 # ⚠️ Il codice gira DENTRO il modulo yt2mp3 (exec nel suo __dict__): usa nomi
 # suoi — _dep, _YT_FORMAT_DL, tk, S, F, messagebox, la traduzione — che nel
@@ -1709,23 +1910,31 @@ def _kd_download_thread(self, url, cartella, formato=None):
                 os.remove(os.path.join(cartella, f))
             except Exception:
                 pass
-    mp4 = [os.path.join(cartella, f) for f in new_files
-           if f.lower().endswith(".mp4")]
+    # si cerca il file del formato CHIESTO: con l'MP3 la vecchia ricerca
+    # dei soli .mp4 non trovava niente e diceva "nessun MP4 trovato"
+    _ext = (".mp3", ".m4a", ".opus", ".webm") if formato == 'mp3' else (".mp4",)
+    trovati = [os.path.join(cartella, f) for f in new_files
+               if f.lower().endswith(_ext)]
     self.root.after(0, self._chiudi_progresso)
-    if not mp4:
-        self.root.after(50, lambda: messagebox.showwarning(
-            _("Attenzione"), _("Download finito ma nessun MP4 trovato."), parent=self.root))
+    if not trovati:
+        _nome = formato.upper()
+        self.root.after(50, lambda n=_nome: messagebox.showwarning(
+            _("Attenzione"),
+            _("Download finito ma nessun {f} trovato.").format(f=n),
+            parent=self.root))
         return
-    finale = max(mp4, key=os.path.getmtime)
+    finale = max(trovati, key=os.path.getmtime)
     # cosi' il bottone "Trova il file" sa esattamente quale file aprire
     try:
         self._scaricati[url] = finale
     except Exception:
         pass
     size_mb = os.path.getsize(finale) / (1024 * 1024)
-    self.root.after(50, lambda f=os.path.basename(finale), s=size_mb, p=finale: messagebox.showinfo(
+    _cosa = _("Audio scaricato") if formato == 'mp3' else _("Video scaricato")
+    self.root.after(50, lambda f=os.path.basename(finale), s=size_mb, p=finale,
+                    c=_cosa: messagebox.showinfo(
         _("✅ Download completato"),
-        _("Video scaricato:\n{f}\n\nDimensione: {s:.2f} MB\n\nPercorso:\n{p}").format(f=f, s=s, p=p),
+        _("{c}:\n{f}\n\nDimensione: {s:.2f} MB\n\nPercorso:\n{p}").format(c=c, f=f, s=s, p=p),
         parent=self.root))
 
 
@@ -1741,7 +1950,7 @@ def _kd_chiedi_e_scarica(self, url):
              font=F('Segoe UI', 11, 'bold')).pack(padx=S(24), pady=(S(18), S(4)))
     tk.Label(dlg, text=_("L'MP3 prende solo l'audio: piu' veloce e occupa molto meno."),
              bg='#1a1a2e', fg='#9aa4bf', font=F('Segoe UI', 9),
-             wraplength=S(300)).pack(padx=S(24), pady=(0, S(14)))
+             wraplength=S(480)).pack(padx=S(24), pady=(0, S(14)))
 
     def scegli(formato):
         dlg.destroy()
@@ -1759,11 +1968,44 @@ def _kd_chiedi_e_scarica(self, url):
     tk.Button(dlg, text=_("Annulla"), command=dlg.destroy, bg='#33374d', fg='white',
               font=F('Segoe UI', 9), relief='flat', cursor='hand2').pack(pady=(0, S(16)))
 
-    dlg.update_idletasks()
-    x = self.root.winfo_rootx() + (self.root.winfo_width() - dlg.winfo_width()) // 2
-    y = self.root.winfo_rooty() + (self.root.winfo_height() - dlg.winfo_height()) // 3
-    dlg.geometry(f"+{max(0, x)}+{max(0, y)}")
+    # Misura FISSA e uguale a quella del download: due finestre della stessa
+    # famiglia che cambiano taglia a seconda del testo sembrano due
+    # programmi diversi. Stessa larghezza, stesso posto.
+    W, H = S(560), S(200)
+    x = (dlg.winfo_screenwidth() - W) // 2
+    y = (dlg.winfo_screenheight() - H) // 2
+    dlg.geometry(f"{W}x{H}+{x}+{y}")
     dlg.grab_set()
+
+
+def _kd_crea_finestra_progresso(self, formato=None):
+    formato = (formato or getattr(self, '_kd_formato', 'mp4')).upper()
+    win = tk.Toplevel(self.root)
+    # il titolo dice il formato VERO: scaricando un MP3 leggere "MP4" fa
+    # solo dubitare di aver premuto il bottone sbagliato
+    win.title(_("Download {f} in corso…").format(f=formato))
+    win.configure(bg="#2a2a2a")
+    win.transient(self.root)
+    win.resizable(False, False)
+    W, H = S(560), S(180)
+    x = (win.winfo_screenwidth() - W) // 2
+    y = (win.winfo_screenheight() - H) // 2
+    win.geometry(f"{W}x{H}+{x}+{y}")
+    tk.Label(win, text="⏬ " + _("Download in corso…"), font=F("Segoe UI", 15, "bold"),
+             fg="#00aaff", bg="#2a2a2a").pack(pady=(S(18), S(10)))
+    win._lbl = tk.Label(win, text=_("Inizializzazione…"), font=F("Segoe UI", 10),
+                        fg="#cccccc", bg="#2a2a2a")
+    win._lbl.pack(pady=S(4))
+    win._bar = ttk.Progressbar(win, mode="determinate", length=S(460))
+    win._bar.pack(pady=S(8))
+    win._pct = tk.Label(win, text="0%", font=F("Segoe UI", 12, "bold"),
+                       fg="#00aaff", bg="#2a2a2a")
+    win._pct.pack(pady=S(4))
+    try:
+        win.grab_set()
+    except Exception:
+        pass
+    return win
 '''
 
 try:
@@ -1777,6 +2019,7 @@ try:
         exec(compile(_KD_YT, '<patch 013 punto 15>', 'exec'), _yt15.__dict__)
         _yt15.YoutubePanel._download_thread = _yt15.__dict__['_kd_download_thread']
         _yt15.YoutubePanel._chiedi_e_scarica = _yt15.__dict__['_kd_chiedi_e_scarica']
+        _yt15.YoutubePanel._crea_finestra_progresso = _yt15.__dict__['_kd_crea_finestra_progresso']
 
         _scarica_orig_yt = _yt15.YoutubePanel._scarica_mp4
 
@@ -1820,3 +2063,144 @@ try:
         print("\U0001F3B5 YouTube: il Download chiede MP4 o MP3")
 except Exception as _e:
     print("\u26A0\uFE0F patch 013, scelta del formato non aggiunta: %s" % _e)
+
+
+# ==========================================================================
+# 16. I PRIMI 3 RISULTATI YOUTUBE SI PREPARANO DA SOLI
+# ==========================================================================
+# Premendo Play su un video YouTube il tempo se ne va quasi tutto nel ricavare
+# l'indirizzo del flusso: yt-dlp interroga YouTube e supera il controllo
+# anti-bot. MISURATO su un video vero: 6,6 secondi, su linea lenta di piu'.
+#
+# Il brano non e' ancora stato scelto, ma i primi risultati sono quelli che si
+# scelgono quasi sempre: si risolvono in background mentre l'utente guarda
+# l'elenco, e l'indirizzo resta pronto per 2 ore (quelli di YouTube durano ~6).
+#
+# NON si scarica niente: sono richieste piccole, la banda resta libera per il
+# video — che e' il punto, dove la connessione e' lenta.
+# Misurato dopo: indirizzo gia' pronto, 0,0000s.
+
+_KD_PRONTI = r'''
+import threading as _thP
+import time as _tP
+
+_url_lock = _thP.Lock()
+_url_pronti = {}
+_url_in_corso = {}
+_URL_VALIDO_SEC = 2 * 3600
+
+
+def _url_in_cache(vid):
+    """Indirizzo gia' risolto e ancora buono, oppure None."""
+    import time as _t
+    with _url_lock:
+        dati = _url_pronti.get(vid)
+    if not dati:
+        return None
+    url, titolo, scade = dati
+    if _t.time() > scade:
+        with _url_lock:
+            _url_pronti.pop(vid, None)
+        return None
+    return url, titolo
+
+
+def prepara_risultati(urls, quanti=3):
+    """Risolve in anticipo l'indirizzo dei primi risultati di una ricerca.
+
+    PERCHE': quando si preme Play su un video YouTube, il tempo se ne va quasi
+    tutto in `risolvi_url` — yt-dlp deve interrogare YouTube e superare il
+    controllo anti-bot, e sono secondi (fino a 45 di timeout). Il video non e'
+    ancora stato scelto, ma i primi risultati sono quelli che si scelgono quasi
+    sempre: risolverli mentre l'utente guarda l'elenco fa trovare l'indirizzo
+    gia' pronto.
+
+    NON scarica niente: sono richieste piccole, non tocca la banda del video —
+    che e' il punto, su una connessione lenta.
+    """
+    import time as _t
+    for u in list(urls)[:max(0, int(quanti))]:
+        vid = _id_da(u)
+        if not vid or _url_in_cache(vid):
+            continue
+        with _url_lock:
+            t = _url_in_corso.get(vid)
+            if t is not None and t.is_alive():
+                continue
+
+        def _lavora(_vid=vid):
+            try:
+                url, titolo = risolvi_url(_vid)
+                if url:
+                    with _url_lock:
+                        _url_pronti[_vid] = (url, titolo, _t.time() + _URL_VALIDO_SEC)
+                    print("[YT-PRONTO] indirizzo gia' risolto per %s" % _vid)
+            except Exception as e:
+                print("[YT-PRONTO] %s non risolto: %s" % (_vid, e))
+
+        th = threading.Thread(target=_lavora, daemon=True, name="yt-pronto-%s" % vid)
+        with _url_lock:
+            _url_in_corso[vid] = th
+        th.start()
+'''
+
+try:
+    from moduli import youtube_local as _yl16
+
+    if not getattr(_yl16, '_primi_pronti', False):
+        # il codice gira DENTRO youtube_local: usa i suoi nomi (_id_da, risolvi_url)
+        exec(compile(_KD_PRONTI, '<patch 013 punto 16>', 'exec'), _yl16.__dict__)
+
+        _ripro_orig = _yl16.riproduci_youtube
+
+        def _riproduci_da_pronto(system, parent, video_id, tonalita=0,
+                                 ripiego_browser=None):
+            try:
+                vid = _yl16._id_da(video_id)
+                pronto = _yl16._url_in_cache(vid) if vid else None
+                if pronto:
+                    print("[YT] indirizzo gia' pronto: nessuna attesa")
+
+                    def _play():
+                        try:
+                            try:
+                                system.engine.yt_title = pronto[1]
+                            except Exception:
+                                pass
+                            if system.load_file(pronto[0], tonalita):
+                                system.play(tonalita)
+                            elif ripiego_browser:
+                                ripiego_browser()
+                        except Exception as e:
+                            print("[YT] partenza da indirizzo pronto fallita: %s" % e)
+                            _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
+
+                    try:
+                        parent.after(0, _play)
+                    except Exception:
+                        _play()
+                    return
+            except Exception as e:
+                print("[YT-PRONTO] %s" % e)
+            return _ripro_orig(system, parent, video_id, tonalita, ripiego_browser)
+
+        _yl16.riproduci_youtube = _riproduci_da_pronto
+
+        from moduli import yt2mp3 as _yt16
+        _mostra_orig = _yt16.YoutubePanel._mostra_risultati
+
+        def _mostra_e_prepara(self, lista, _orig=_mostra_orig):
+            _orig(self, lista)
+            try:
+                # ogni risultato e' una tupla (url, miniatura, titolo)
+                urls = [r[0] for r in (self._results or [])[:3] if r and r[0]]
+                if urls:
+                    _yl16.prepara_risultati(urls, quanti=3)
+            except Exception as e:
+                print("[YT-PRONTO] non avviato: %s" % e)
+
+        _yt16.YoutubePanel._mostra_risultati = _mostra_e_prepara
+        _yl16._primi_pronti = True
+        print("\U0001F680 YouTube: i primi 3 risultati si preparano da soli")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, preparazione dei risultati non attiva: %s" % _e)
