@@ -70,6 +70,11 @@
 #     rimettono alla chiusura; se KaraDom si chiude male, al primo avvio
 #     successivo si rimettono da soli.
 
+#
+# 12. BARRA DEL TITOLO BLU NOTTE (Windows 11) - la caption la disegna
+#     Windows, non Tk: restava una fascia chiara in cima a un programma
+#     tutto blu notte. Si chiede al gestore delle finestre (DWM).
+
 import sys
 import tkinter as tk
 
@@ -894,6 +899,11 @@ try:
                 return _BLU_BOX
             if sfondo == _GRIGIO_BARRA and _e_blu(master):
                 return _BLU_FONDO
+            if sfondo == '#000000' and _e_blu(master):
+                # i bottoni della barra avevano il fondo nero: con la
+                # barra grigia non si notava, sul blu notte diventa un
+                # riquadro scuro attorno a ogni icona
+                return _BLU_FONDO
             if sfondo in _GRIGI_BOTTONE and _e_blu(master):
                 return _BLU_BOX
             return None
@@ -1107,3 +1117,53 @@ if sys.platform.startswith('win'):
         atexit.register(_ns_suoni['rimetti'])
     except Exception as _e:
         print("\u26A0\uFE0F patch 013, suoni di sistema non spenti: %s" % _e)
+
+
+# ==========================================================================
+# 12. BARRA DEL TITOLO BLU NOTTE (solo Windows 11)
+# ==========================================================================
+# La barra del titolo non la disegna Tk ma il gestore delle finestre: nessuna
+# opzione di tkinter la tocca. Tutto il resto di KaraDom e' blu notte e quella
+# fascia chiara restava in cima come la riga di un altro programma.
+#
+# Su Windows 10 e su Linux la chiamata non fa niente e si tira dritto.
+
+try:
+    import tkinter as _tkT
+
+    if sys.platform.startswith('win') and not getattr(_tkT.Tk, '_titolo_blu_notte', False):
+
+        def _colora_titolo(win, colore='#060c1c', testo='#ffffff'):
+            try:
+                import ctypes
+                win.update_idletasks()
+                hwnd = int(win.wm_frame(), 16)
+
+                def _colorref(esa):
+                    # Windows vuole i byte al contrario: 0x00BBGGRR
+                    r, g, b = (int(esa[i:i + 2], 16) for i in (1, 3, 5))
+                    return ctypes.c_int((b << 16) | (g << 8) | r)
+
+                dwm = ctypes.windll.dwmapi
+                dwm.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(_colorref(colore)), 4)
+                dwm.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(_colorref(testo)), 4)
+            except Exception:
+                pass
+
+        for _cls in (_tkT.Tk, _tkT.Toplevel):
+            _vecchio = _cls.__init__
+
+            def _nuovo(self, *a, _orig=_vecchio, **kw):
+                _orig(self, *a, **kw)
+                # non subito: la finestra deve esistere per il gestore
+                try:
+                    self.after(400, lambda: _colora_titolo(self))
+                except Exception:
+                    pass
+
+            _cls.__init__ = _nuovo
+
+        _tkT.Tk._titolo_blu_notte = True
+        print("🌑 Barra del titolo: blu notte")
+except Exception as _e:
+    print("⚠️ patch 013, barra del titolo non colorata: %s" % _e)
