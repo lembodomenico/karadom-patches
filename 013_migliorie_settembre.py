@@ -75,6 +75,11 @@
 #     Windows, non Tk: restava una fascia chiara in cima a un programma
 #     tutto blu notte. Si chiede al gestore delle finestre (DWM).
 
+#
+# 13. LO SPLASH DELLA PROVA STA DENTRO LO SCHERMO - era alto 880 px fissi:
+#     su un portatile 1366x768 il fondo (bottone della prova, codice
+#     licenza) finiva sotto il bordo e non si poteva raggiungere.
+
 import sys
 import tkinter as tk
 
@@ -1171,3 +1176,154 @@ try:
         print("🌑 Barra del titolo: blu notte")
 except Exception as _e:
     print("⚠️ patch 013, barra del titolo non colorata: %s" % _e)
+
+
+# ==========================================================================
+# 13. LO SPLASH DELLA PROVA STA DENTRO LO SCHERMO
+# ==========================================================================
+# La finestra di attivazione era alta 880 px fissi. Su un portatile 1366x768
+# lo schermo ne ha 768: il fondo della finestra — dove stanno il bottone della
+# prova e il campo del codice licenza — restava sotto il bordo e non si poteva
+# raggiungere. Chi non aveva la licenza non riusciva nemmeno a partire.
+#
+# Qui la finestra non supera mai lo spazio disponibile e il contenuto si
+# STRINGE per starci: prima si toglie il vuoto fra i campi, poi, solo se
+# serve ancora, si rimpicciolisce il logo (il piu' grande che ci sta).
+# Niente barra di scorrimento: si deve vedere tutto subito.
+#
+# Nella stessa finestra il seriale era scritto in verde acceso su fondo
+# chiaro: va letto e ricopiato al telefono, quindi diventa bianco, grassetto
+# e a spaziatura fissa (0 e O, 1 e I non si confondono).
+
+try:
+    import tkinter as _tkS
+    from moduli import splash as _spl
+
+    if not getattr(_spl.SplashScreen, '_finestra_adattata', False):
+
+        def _kd_alta(w):
+            # SOLO winfo_reqheight: sommare y+altezza dei figli non funziona,
+            # il footer e' ancorato in basso e falsa il conto.
+            w.update_idletasks()
+            return w.winfo_reqheight()
+
+        def _kd_stringi_spazi(w, fattore):
+            for c in w.winfo_children():
+                try:
+                    info = c.pack_info()
+                except Exception:
+                    info = None
+                if info:
+                    nuovo = {}
+                    for chiave in ('pady', 'ipady'):
+                        v = info.get(chiave)
+                        if isinstance(v, (tuple, list)):
+                            nuovo[chiave] = tuple(int(int(x) * fattore) for x in v)
+                        elif v not in (None, '', 0, '0'):
+                            nuovo[chiave] = int(int(v) * fattore)
+                    if nuovo:
+                        c.pack_configure(**nuovo)
+                try:
+                    if int(c.cget('pady') or 0) > 2:
+                        c.configure(pady=max(2, int(int(c.cget('pady')) * fattore)))
+                except Exception:
+                    pass
+                _kd_stringi_spazi(c, fattore)
+
+        def _kd_logo(w, quota, percorso=None):
+            for c in w.winfo_children():
+                try:
+                    if c.cget('image'):
+                        from PIL import Image, ImageTk
+                        p = percorso or getattr(c, '_kd_logo_path', None)
+                        if p:
+                            img = Image.open(p)
+                            img.thumbnail((10000, quota), Image.Resampling.LANCZOS)
+                            nuova = ImageTk.PhotoImage(img)
+                            c.configure(image=nuova)
+                            c.image = nuova
+                            return True
+                except Exception:
+                    pass
+                if _kd_logo(c, quota, percorso):
+                    return True
+            return False
+
+        def _kd_respira(w, avanzo):
+            """Un po' d'aria in cima: i campi non partono incollati al logo."""
+            if avanzo < 12:
+                return
+            for c in w.winfo_children():
+                try:
+                    info = c.pack_info()
+                except Exception:
+                    continue
+                if info.get('side') in (None, '', 'top'):
+                    v = info.get('pady', 0)
+                    base = int(v[0]) if isinstance(v, (tuple, list)) else int(v or 0)
+                    c.pack_configure(pady=(base + min(int(avanzo / 3), 20), base))
+                    return
+
+        _crea_originale = _spl.SplashScreen._create_widgets
+        _init_originale = _spl.SplashScreen.__init__
+
+        def _create_widgets_adattato(self):
+            _crea_originale(self)
+
+            # il seriale, leggibile
+            try:
+                self.entry_serial.configure(fg='#ffffff',
+                                            readonlybackground='#2d2d44',
+                                            font=('Consolas', 12, 'bold'))
+            except Exception:
+                pass
+
+            try:
+                r = self.root
+                libera = r.winfo_screenheight() - 80
+                voluta = _kd_alta(r)
+                reale = max(420, min(voluta, libera))
+                self._kd_h_reale = reale
+
+                if voluta > reale - 16:
+                    percorso = None
+                    try:
+                        percorso = self._get_logo_path()
+                    except Exception:
+                        pass
+                    _kd_stringi_spazi(r, 0.35)
+                    for alto in (150, 132, 116, 100, 86, 72, 58):
+                        _kd_logo(r, alto, percorso)
+                        if _kd_alta(r) <= reale - 16:
+                            _kd_respira(r, reale - 16 - _kd_alta(r))
+                            break
+                    else:
+                        _kd_stringi_spazi(r, 0.4)
+                    serve = _kd_alta(r) + 8
+                    if 400 < serve < reale:
+                        self._kd_h_reale = serve
+            except Exception:
+                pass
+
+        def _init_adattato(self, *a, **kw):
+            _init_originale(self, *a, **kw)
+            # __init__ rimette 880 dopo aver creato i widget: qui si ridà
+            # l'altezza che sta davvero nello schermo.
+            try:
+                r = getattr(self, 'root', None)
+                h = getattr(self, '_kd_h_reale', 0)
+                if r is not None and h:
+                    r.update_idletasks()
+                    w = r.winfo_width() or 500
+                    x = max(0, (r.winfo_screenwidth() - w) // 2)
+                    y = max(0, (r.winfo_screenheight() - h) // 2)
+                    r.geometry("%dx%d+%d+%d" % (w, h, x, y))
+            except Exception:
+                pass
+
+        _spl.SplashScreen._create_widgets = _create_widgets_adattato
+        _spl.SplashScreen.__init__ = _init_adattato
+        _spl.SplashScreen._finestra_adattata = True
+        print("\U0001F4D0 Splash della prova: sta nello schermo, seriale leggibile")
+except Exception as _e:
+    print("\u26A0\uFE0F patch 013, splash non adattato: %s" % _e)
