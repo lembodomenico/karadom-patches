@@ -23,7 +23,9 @@
 #
 # COSA CAMBIA:
 #   punto 3  ⭐ LA CURA PRINCIPALE: si cerca quando l'utente ha finito di
-#            scrivere (500 ms invece di 150). A 150 il debounce non
+#            scrivere (700 ms invece di 150) - ma SOLO se l'archivio
+#            supera i 100.000 brani. Sotto quella soglia tutto resta
+#            com'era: chi non aveva il problema non si accorge di nulla. A 150 il debounce non
 #            entrava mai in funzione: partiva una ricerca per lettera.
 #   punto 1  l'indice si costruisce al CARICAMENTO, nello stesso ciclo che gia'
 #            scorre i brani e si ferma ogni 2000 per lasciar respirare la
@@ -180,6 +182,8 @@ def _ensure_search_index(self, gen=None):
 #       incollato, una ricerca sola ....... 1,6 ms medi, punta 14,5, mai oltre 50
 #       digitato, attesa 150 ms (oggi) .... 7,2 ms medi, punta 58,5, 3 volte oltre 50
 #       digitato, attesa 500 ms ........... 0,9 ms medi, punta 21,9, mai oltre 50
+#       (700 ms: il valore scelto sul campo il 7-9; si alza da
+#        configurazione se al cliente non basta)
 #
 #   A 500 ms va meglio che incollando. Il valore si legge dalla
 #   configurazione (`ricerca_attesa_ms`), cosi' si tara sul campo senza
@@ -190,10 +194,19 @@ CODICE_ATTESA = '''
 def _debounce_suggerimenti(self, event=None):
     """Aspetta che l'utente abbia finito di scrivere, poi cerca UNA volta.
 
-    [014] Da 150 a 500 ms. A 150 il debounce non entrava mai in funzione,
-    perche' una persona digita piu' in fretta di cosi': partiva una ricerca
-    per ogni lettera, e su 400.000 brani ognuna macina in Python e fa
-    perdere i tempi al MIDI.
+    [014] Da 150 a 700 ms, MA SOLO SUGLI ARCHIVI GROSSI. A 150 il debounce
+    non entrava mai in funzione, perche' una persona digita piu' in fretta di
+    cosi': partiva una ricerca per ogni lettera, e su 400.000 brani ognuna
+    macina in Python e fa perdere i tempi al MIDI sull'expander.
+
+    Ma quel difetto esiste solo dove l'archivio e' enorme: con poche migliaia
+    di basi una ricerca costa niente e non c'e' motivo di far aspettare
+    l'utente. Quindi sotto la soglia si resta a 150 ms, **esattamente come
+    prima della patch**: chi non aveva il problema non si accorge di nulla.
+
+    Il conteggio si legge a OGNI battuta, non una volta sola: cambiando
+    cartella - da una piccola a quella grande - la scelta deve seguire. Non
+    costa niente: e' la lunghezza di una lista, non una scansione.
     """
     if event and event.keysym in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R',
                                    'Alt_L', 'Alt_R', 'Caps_Lock', 'Tab',
@@ -204,16 +217,28 @@ def _debounce_suggerimenti(self, event=None):
         return
     if self._debounce_id:
         self.parent.after_cancel(self._debounce_id)
-    attesa = getattr(self, '_attesa_014', None)
-    if attesa is None:
-        attesa = 500
+
+    # i due valori e la soglia si leggono una volta sola: sono impostazioni
+    valori = getattr(self, '_attese_014', None)
+    if valori is None:
+        lunga, corta, soglia = 700, 150, 100000
         try:
             from moduli.database import Database
-            attesa = int(str(Database.get_config('ricerca_attesa_ms', '500')).strip())
+            lunga = int(str(Database.get_config('ricerca_attesa_ms', '700')).strip())
+            soglia = int(str(Database.get_config('ricerca_soglia_brani', '100000')).strip())
         except Exception:
             pass
-        attesa = max(100, min(2000, attesa))
-        self._attesa_014 = attesa
+        valori = (max(100, min(2000, lunga)), corta, max(0, soglia))
+        self._attese_014 = valori
+    lunga, corta, soglia = valori
+
+    # il NUMERO di brani invece si guarda adesso: puo' essere cambiato
+    try:
+        quanti = len(self.brani_pc or ())
+    except Exception:
+        quanti = 0
+    attesa = lunga if quanti >= soglia else corta
+
     self._debounce_id = self.parent.after(attesa, self.aggiorna_suggerimenti_live)
 '''
 
@@ -277,7 +302,7 @@ def apply():
                     C2._orig_014_attesa = C2._debounce_suggerimenti
                 setattr(C2, "_debounce_suggerimenti",
                         spazio_search["_debounce_suggerimenti"])
-                fatti.append("si cerca a fine parola (500 ms)")
+                fatti.append("si cerca a fine parola (700 ms oltre i 100.000 brani)")
         else:
             print("patch 014: LibreriaSearchMixin diverso, salto il punto 2")
     except Exception as e:
