@@ -22,6 +22,9 @@
 # sistema, molla il GIL e per riprenderlo aspetta il suo turno.
 #
 # COSA CAMBIA:
+#   punto 3  ⭐ LA CURA PRINCIPALE: si cerca quando l'utente ha finito di
+#            scrivere (500 ms invece di 150). A 150 il debounce non
+#            entrava mai in funzione: partiva una ricerca per lettera.
 #   punto 1  l'indice si costruisce al CARICAMENTO, nello stesso ciclo che gia'
 #            scorre i brani e si ferma ogni 2000 per lasciar respirare la
 #            musica. La ricerca lo trova gia' pronto e non lo rifa' mai piu'.
@@ -161,6 +164,60 @@ def _ensure_search_index(self, gen=None):
 '''
 
 
+# ------------------------------------------------------------------ punto 3
+#   IL DEBOUNCE: SI CERCA QUANDO L'UTENTE HA FINITO DI SCRIVERE
+#
+#   E' la cura principale, ed e' una riga. Il costo sta in OGNI ricerca: con
+#   l'attesa a 150 ms, e una persona che digita a ~200 ms per tasto, il
+#   debounce non entra mai in funzione e parte una ricerca per lettera.
+#
+#   E il costo cresce mentre si finisce di scrivere: con due lettere la
+#   ricerca trova subito i suoi 100 risultati e si ferma, ma quando la parola
+#   si allunga i risultati scendono sotto 100 e ogni ricerca scandisce TUTTI
+#   i 400.000 brani (0,21 s l'una).
+#
+#   MISURATO (thread che suona, mentre si cerca "albachiara"):
+#       incollato, una ricerca sola ....... 1,6 ms medi, punta 14,5, mai oltre 50
+#       digitato, attesa 150 ms (oggi) .... 7,2 ms medi, punta 58,5, 3 volte oltre 50
+#       digitato, attesa 500 ms ........... 0,9 ms medi, punta 21,9, mai oltre 50
+#
+#   A 500 ms va meglio che incollando. Il valore si legge dalla
+#   configurazione (`ricerca_attesa_ms`), cosi' si tara sul campo senza
+#   ripubblicare la patch: 300 se si vuole piu' reattiva, 700 su macchine
+#   lente.
+
+CODICE_ATTESA = '''
+def _debounce_suggerimenti(self, event=None):
+    """Aspetta che l'utente abbia finito di scrivere, poi cerca UNA volta.
+
+    [014] Da 150 a 500 ms. A 150 il debounce non entrava mai in funzione,
+    perche' una persona digita piu' in fretta di cosi': partiva una ricerca
+    per ogni lettera, e su 400.000 brani ognuna macina in Python e fa
+    perdere i tempi al MIDI.
+    """
+    if event and event.keysym in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R',
+                                   'Alt_L', 'Alt_R', 'Caps_Lock', 'Tab',
+                                   'Up', 'Down', 'Left', 'Right',
+                                   'Home', 'End', 'Insert', 'Num_Lock',
+                                   'F1', 'F2', 'F3', 'F4', 'F5', 'F6',
+                                   'F7', 'F8', 'F9', 'F10', 'F11', 'F12'):
+        return
+    if self._debounce_id:
+        self.parent.after_cancel(self._debounce_id)
+    attesa = getattr(self, '_attesa_014', None)
+    if attesa is None:
+        attesa = 500
+        try:
+            from moduli.database import Database
+            attesa = int(str(Database.get_config('ricerca_attesa_ms', '500')).strip())
+        except Exception:
+            pass
+        attesa = max(100, min(2000, attesa))
+        self._attesa_014 = attesa
+    self._debounce_id = self.parent.after(attesa, self.aggiorna_suggerimenti_live)
+'''
+
+
 def _spenta():
     """L'interruttore: `patch_014 = 0` nella configurazione la disattiva.
 
@@ -213,6 +270,14 @@ def apply():
                 C2._orig_014_indice = C2._ensure_search_index
             setattr(C2, "_ensure_search_index", spazio_search["_ensure_search_index"])
             fatti.append("indice di riserva col respiro")
+            # punto 3: si cerca quando l'utente ha finito di scrivere
+            if hasattr(C2, "_debounce_suggerimenti"):
+                exec(compile(CODICE_ATTESA, "<patch014c>", "exec"), spazio_search)
+                if not hasattr(C2, "_orig_014_attesa"):
+                    C2._orig_014_attesa = C2._debounce_suggerimenti
+                setattr(C2, "_debounce_suggerimenti",
+                        spazio_search["_debounce_suggerimenti"])
+                fatti.append("si cerca a fine parola (500 ms)")
         else:
             print("patch 014: LibreriaSearchMixin diverso, salto il punto 2")
     except Exception as e:
@@ -247,6 +312,9 @@ def revert():
         if hasattr(C2, "_orig_014_indice"):
             C2._ensure_search_index = C2._orig_014_indice
             rimessi.append("_ensure_search_index")
+        if hasattr(C2, "_orig_014_attesa"):
+            C2._debounce_suggerimenti = C2._orig_014_attesa
+            rimessi.append("_debounce_suggerimenti")
     except Exception as e:
         print("revert 014 punto 2: %s" % e)
     print("patch 014: rimessi gli originali (%s)" % (", ".join(rimessi) or "niente"))
