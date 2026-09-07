@@ -23,7 +23,7 @@
 #
 # COSA CAMBIA:
 #   punto 3  ⭐ LA CURA PRINCIPALE: si cerca quando l'utente ha finito di
-#            scrivere (700 ms invece di 150) - ma SOLO se l'archivio
+#            scrivere (900 ms invece di 150) - ma SOLO se l'archivio
 #            supera i 100.000 brani. Sotto quella soglia tutto resta
 #            com'era: chi non aveva il problema non si accorge di nulla. A 150 il debounce non
 #            entrava mai in funzione: partiva una ricerca per lettera.
@@ -194,7 +194,7 @@ CODICE_ATTESA = '''
 def _debounce_suggerimenti(self, event=None):
     """Aspetta che l'utente abbia finito di scrivere, poi cerca UNA volta.
 
-    [014] Da 150 a 700 ms, MA SOLO SUGLI ARCHIVI GROSSI. A 150 il debounce
+    [014] Da 150 a 900 ms, MA SOLO SUGLI ARCHIVI GROSSI. A 150 il debounce
     non entrava mai in funzione, perche' una persona digita piu' in fretta di
     cosi': partiva una ricerca per ogni lettera, e su 400.000 brani ognuna
     macina in Python e fa perdere i tempi al MIDI sull'expander.
@@ -221,10 +221,10 @@ def _debounce_suggerimenti(self, event=None):
     # i due valori e la soglia si leggono una volta sola: sono impostazioni
     valori = getattr(self, '_attese_014', None)
     if valori is None:
-        lunga, corta, soglia = 700, 150, 100000
+        lunga, corta, soglia = 900, 150, 100000
         try:
             from moduli.database import Database
-            lunga = int(str(Database.get_config('ricerca_attesa_ms', '700')).strip())
+            lunga = int(str(Database.get_config('ricerca_attesa_ms', '900')).strip())
             soglia = int(str(Database.get_config('ricerca_soglia_brani', '100000')).strip())
         except Exception:
             pass
@@ -302,7 +302,7 @@ def apply():
                     C2._orig_014_attesa = C2._debounce_suggerimenti
                 setattr(C2, "_debounce_suggerimenti",
                         spazio_search["_debounce_suggerimenti"])
-                fatti.append("si cerca a fine parola (700 ms oltre i 100.000 brani)")
+                fatti.append("si cerca a fine parola (900 ms oltre i 100.000 brani)")
         else:
             print("patch 014: LibreriaSearchMixin diverso, salto il punto 2")
     except Exception as e:
