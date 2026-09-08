@@ -10,6 +10,7 @@
     "014_indice_pronto_niente_calo_bpm.py",
     "015_ricerca_in_c_niente_calo.py",
     "016_ricerca_da_tabella.py",
-    "017_ricerca_scaletta_da_tabella.py"
+    "017_ricerca_scaletta_da_tabella.py",
+    "018_patch_applicate_allo_splash.py"
   ]
 }
