@@ -29,40 +29,20 @@ def apply():
     if _spenta():
         return False
     try:
-        import sys
-        import threading
-        import time
-
-        def quando_c_e():
-            # ⚠️ moduli.libreria NON si importa durante l'avvio: tirerebbe
-            #    dentro mezzo programma prima che sia pronto. Si aspetta che
-            #    la classe ci sia davvero (durante l'import il modulo e' gia'
-            #    in sys.modules ma ancora mezzo vuoto).
-            for _ in range(1800):
-                time.sleep(0.1)
-                m = sys.modules.get('moduli.libreria')
-                C = getattr(m, 'LibreriaSlider', None) if m else None
-                if C is None or not hasattr(C, '_setup_brano_autocomplete'):
-                    continue
-                if hasattr(C, '_orig_024'):
-                    return
-                if not hasattr(C, '_cerca_in_tabella_016'):
-                    continue          # la 016 non e' ancora entrata: si aspetta
-                try:
-                    C._orig_024 = C._setup_brano_autocomplete
-                    spazio = m.__dict__
-                    exec(compile(CODICE, "<patch024>", "exec"), spazio)
-                    setattr(C, '_setup_brano_autocomplete', spazio['_setup_brano_autocomplete'])
-                    print("patch 024: la ricerca nelle righe della scaletta "
-                          "passa dalla tabella")
-                except Exception as e:
-                    print("patch 024: %s" % e)
-                return
-
-        threading.Thread(target=quando_c_e, daemon=True,
-                         name="RigaScaletta024").start()
+        # Come la 016: si importa il modulo e si sostituisce il metodo, subito.
+        import moduli.libreria as m
+        C = m.LibreriaSlider
+        if hasattr(C, '_orig_024'):
+            return True
+        C._orig_024 = C._setup_brano_autocomplete
+        spazio = m.__dict__
+        exec(compile(CODICE, "<patch024>", "exec"), spazio)
+        setattr(C, '_setup_brano_autocomplete', spazio['_setup_brano_autocomplete'])
+        print("patch 024: la ricerca nelle righe della scaletta "
+              "passa dalla tabella")
         return True
-    except Exception:
+    except Exception as e:
+        print("patch 024: %s" % e)
         return False
 
 
