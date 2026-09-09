@@ -14,6 +14,7 @@
     "018_patch_applicate_allo_splash.py",
     "019_avviso_ripristino.py",
     "020_backup_cartella_giusta.py",
-    "021_cerca_aggiornamenti.py"
+    "021_cerca_aggiornamenti.py",
+    "022_pannello_aggiornato.py"
   ]
 }
