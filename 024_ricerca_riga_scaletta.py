@@ -1,9 +1,20 @@
-# 024 - il campo Brano della riga in scaletta cerca nella tabella.
+# 024 - anche la ricerca nelle righe della scaletta passa dalla tabella.
+#
+# Stessa cosa che la 016 ha fatto per il campo filtro in alto, ma sul campo
+# Brano delle righe della scaletta: li' era rimasto un ciclo Python su tutti
+# i brani, e con 400.000 file si sente a ogni tasto.
+#
+# ⚠️ La funzione e' COPIATA DAL SORGENTE e si cambia solo il blocco della
+#    scansione: si porta dietro tutti i nomi che nel compilato potrebbero
+#    mancare (la lezione della 015, che moriva di NameError al primo tasto)
+#    e non dipende da come e' compilato il programma.
+#
+# ⚠️ SOLO SOPRA I 100.000 BRANI: senza la tabella della 016 non cambia niente
+#    e si guarda l'elenco intero, esattamente come prima.
+#
+# SE NON VA BENE: `patch_024 = 0` la spegne su una macchina sola.
 
-import re
-
-TETTO = 500
-ATTESA = 200          # gli stessi millisecondi di debounce dell'originale
+CODICE = 'def _setup_brano_autocomplete(self, riga_index):\n\n    """Configura autocompletamento per campo brano - USA INDICE"""\n\n    riga = self.righe[riga_index]\n\n    entry_brano = riga[\'brano\']\n\n    \n\n    # ✅ Assicurati che il cursore sia visibile\n\n    entry_brano.config(insertbackground=\'white\')\n\n    \n\n    entry_brano.unbind(\'<KeyRelease>\')\n\n    entry_brano.unbind(\'<FocusIn>\')\n\n    entry_brano.unbind(\'<FocusOut>\')\n\n    entry_brano.unbind(\'<Return>\')\n\n    entry_brano.unbind(\'<Down>\')\n\n    entry_brano.unbind(\'<Up>\')\n\n    entry_brano.unbind(\'<Escape>\')\n\n    entry_brano.unbind(\'<Button-1>\')\n\n    \n\n    riga[\'_suggestions_frame\'] = None\n\n    riga[\'_suggestions_listbox\'] = None\n\n    riga[\'_current_suggestions\'] = []\n\n    \n\n    def on_click(e):\n\n        # ✅ Al click, rendi il campo editabile e dai focus\n\n        if entry_brano.cget(\'state\') == \'readonly\' or entry_brano.cget(\'fg\') == \'gray\':\n\n            entry_brano.config(state=\'normal\', fg=\'white\')\n\n            if entry_brano.get() == _("Digita per cercare..."):\n\n                entry_brano.delete(0, tk.END)\n\n            entry_brano.icursor(tk.END)  # Posiziona cursore alla fine\n\n    \n\n    def on_focus_in(e):\n\n        if entry_brano.cget(\'fg\') == \'gray\':\n\n            entry_brano.config(state=\'normal\', fg=\'white\')\n\n            entry_brano.delete(0, tk.END)\n\n    \n\n    def on_focus_out(e):\n\n        entry_brano.after(200, lambda: _check_focus_out())\n\n    \n\n    def _check_focus_out():\n\n        testo = entry_brano.get().strip()\n\n        if not testo or testo.lower() == _("Digita per cercare...").lower():\n\n            entry_brano.config(state=\'normal\', fg=\'gray\')\n\n            entry_brano.delete(0, tk.END)\n\n            entry_brano.insert(0, _("Digita per cercare..."))\n\n        _hide_suggestions()\n\n    \n\n    def on_key_release(e):\n\n        if e.keysym in (\'Up\', \'Down\', \'Return\', \'Escape\'):\n\n            return\n\n        \n\n        # ✅ AZZERA PATH quando inizi a digitare (per evitare path vecchio)\n\n        if riga[\'path\']:\n\n            riga[\'path\'] = \'\'\n\n        \n\n        testo = entry_brano.get().lower().strip()\n\n        \n\n        if not testo or testo == _("Digita per cercare...").lower() or len(testo) < 2:\n\n            _hide_suggestions()\n\n            return\n\n        \n\n        if \'*\' in testo:\n\n            raw_parts = [p.strip() for p in testo.split(\'*\') if p.strip()]\n\n            parti_wildcard = []\n\n            parti_is_ext = []\n\n            for p in raw_parts:\n\n                if p.startswith(\'.\'):\n\n                    parti_wildcard.append(p[1:])\n\n                    parti_is_ext.append(True)\n\n                else:\n\n                    parti_wildcard.append(p)\n\n                    parti_is_ext.append(False)\n\n        else:\n\n            raw_parts = [p for p in re.split(r\'\\s+\', testo) if p]\n\n            parti_wildcard = []\n\n            parti_is_ext = []\n\n            for p in raw_parts:\n\n                if p.startswith(\'.\'):\n\n                    parti_wildcard.append(p[1:])\n\n                    parti_is_ext.append(True)\n\n                else:\n\n                    parti_wildcard.append(p)\n\n                    parti_is_ext.append(False)\n\n        \n\n        if not parti_wildcard:\n\n            _hide_suggestions()\n\n            return\n\n        \n\n        risultati_mp3 = []\n        risultati_altri = []\n        # ✅ Ricerca in THREAD per non bloccare UI con 263k+ brani\n        _ac_gen = getattr(self, \'_ac_search_gen\', 0) + 1\n        self._ac_search_gen = _ac_gen\n        brani_ref = self.brani_pc\n\n        def _ac_search():\n            # ✅ Stesso indice di ricerca del filtro in alto\n            self._ensure_search_index()\n            r_mp3 = []\n            r_altri = []\n            # ⭐ [patch 024] LA RICERCA LA FA IL DATABASE, come nel campo\n            #    filtro in alto (patch 016).\n            #\n            # ⛔ SOPRA I 100.000 BRANI IL CICLO SUI FILE NON SI FA PIU\'.\n            #    Non e\' un ripiego per quando la tabella manca: sopra la soglia\n            #    scorrere 400.000 nomi a ogni tasto e\' proprio la cosa da\n            #    togliere. Se la tabella non fosse ancora pronta la si prepara e\n            #    per QUESTO tasto non si cerca: al tasto dopo c\'e\'.\n            #    Sotto la soglia tutto come prima, riga per riga.\n            _righe024 = None\n            try:\n                _righe024 = self._cerca_in_tabella_016(\n                    parti_wildcard, parti_is_ext, brani_ref, 500)\n            except Exception:\n                _righe024 = None\n            \n            if _righe024 is not None:\n                _da_guardare024 = [brani_ref[_i] for _i in _righe024]\n            else:\n                _soglia024 = 100000\n                try:\n                    from .database import Database as _Db024\n                    _soglia024 = int(str(_Db024.get_config(\n                        \'ricerca_soglia_brani\', \'100000\')).strip())\n                except Exception:\n                    pass\n                if len(brani_ref) >= _soglia024:\n                    try:\n                        self._prepara_tabella_016()\n                    except Exception:\n                        pass\n                    _da_guardare024 = []\n                else:\n                    _da_guardare024 = brani_ref\n            \n            for brano in _da_guardare024:\n                if getattr(self, \'_ac_search_gen\', 0) != _ac_gen:\n                    return  # Cancellata\n                pb = brano.get(\'parole\')\n                ex = brano.get(\'ext\', \'\')\n                if pb is None:\n                    nl = brano[\'nome\'].lower()\n                    ns, ep = os.path.splitext(nl)\n                    ex = ep[1:] if ep else ""\n                    if \' - \' in ns:\n                        pp = ns.split(\' - \', 1)\n                        pb = pp[0].strip().split() + pp[1].strip().split()\n                    else:\n                        pb = ns.split()\n                    if ex:\n                        pb.append(ex)\n                ok = True\n                for i, pc in enumerate(parti_wildcard):\n                    if parti_is_ext[i]:\n                        if ex != pc:\n                            ok = False\n                            break\n                    else:\n                        # ✅ Stessa regola del filtro in alto (aggiorna_suggerimenti_live):\n                        #    prefisso di parola OPPURE sottostringa nel nome completo\n                        nome_full = brano.get(\'nome_lower\', brano[\'nome\'].lower())\n                        if not any(w.startswith(pc) for w in pb) and pc not in nome_full:\n                            ok = False\n                            break\n                if ok:\n                    if ex == \'mp3\':\n                        r_mp3.append(brano)\n                    else:\n                        r_altri.append(brano)\n                    if len(r_mp3) + len(r_altri) >= 100:\n                        break\n            if getattr(self, \'_ac_search_gen\', 0) == _ac_gen:\n                # ✅ Dedup per path\n                visti = set()\n                dedup = []\n                for b in (r_mp3 + r_altri):\n                    p = b.get(\'path\', \'\')\n                    if p not in visti:\n                        visti.add(p)\n                        dedup.append(b)\n                finali = dedup[:50]\n                try:\n                    self.parent.after(0, lambda f=finali: _show_suggestions(f) if f else _hide_suggestions())\n                except:\n                    pass\n\n        threading.Thread(target=_ac_search, daemon=True).start()\n\n    \n\n    def _show_suggestions(risultati):\n\n        _hide_suggestions()\n\n        \n\n        x = entry_brano.winfo_rootx() - self.parent.winfo_rootx()\n\n        y = entry_brano.winfo_rooty() - self.parent.winfo_rooty()\n\n        h = entry_brano.winfo_height()\n\n        \n\n        sugg_container = tk.Frame(self.parent, bg=\'black\', bd=2, relief=\'solid\')\n\n        riga[\'_suggestions_frame\'] = sugg_container\n\n        \n\n        sugg_container.place(x=x - 200, y=y + h, width=700, height=250)\n\n        sugg_container.lift()\n\n        \n\n        listbox = tk.Listbox(\n\n            sugg_container,\n\n            bg=\'#1a1a1a\', fg=\'yellow\',\n\n            font=(\'Arial\', 14),\n\n            relief=\'flat\', bd=0,\n\n            highlightthickness=1,\n\n            highlightbackground=\'#333333\',\n\n            selectmode=\'single\',\n\n            selectbackground=\'#0078D7\',\n\n            activestyle=\'none\'\n\n        )\n\n        listbox.pack(fill=\'both\', expand=True)\n\n        \n\n        for r in risultati:\n\n            listbox.insert(tk.END, f" 🎵 {r[\'nome\']}")\n\n        \n\n        riga[\'_suggestions_listbox\'] = listbox\n\n        riga[\'_current_suggestions\'] = risultati\n\n        \n\n        def on_scroll(event):\n\n            listbox.yview_scroll(-1 * int(event.delta / 120), \'units\')\n\n        \n\n        listbox.bind(\'<MouseWheel>\', on_scroll)\n\n        listbox.bind(\'<Button-4>\', lambda e: listbox.yview_scroll(-1, \'units\'))\n\n        listbox.bind(\'<Button-5>\', lambda e: listbox.yview_scroll(1, \'units\'))\n\n        listbox.bind(\'<<ListboxSelect>>\', lambda e: _select_suggestion())\n\n    \n\n    def _hide_suggestions():\n\n        if riga.get(\'_suggestions_frame\'):\n\n            try:\n\n                riga[\'_suggestions_frame\'].destroy()\n\n            except:\n\n                pass\n\n            riga[\'_suggestions_frame\'] = None\n\n            riga[\'_suggestions_listbox\'] = None\n\n    \n\n    def _navigate_suggestions(e):\n\n        listbox = riga.get(\'_suggestions_listbox\')\n\n        if not listbox:\n\n            return\n\n        \n\n        current = listbox.curselection()\n\n        size = listbox.size()\n\n        \n\n        if e.keysym == \'Down\':\n\n            next_idx = (current[0] + 1) if current else 0\n\n            next_idx = min(next_idx, size - 1)\n\n        elif e.keysym == \'Up\':\n\n            next_idx = (current[0] - 1) if current else size - 1\n\n            next_idx = max(next_idx, 0)\n\n        else:\n\n            return\n\n        \n\n        listbox.selection_clear(0, tk.END)\n\n        listbox.selection_set(next_idx)\n\n        listbox.see(next_idx)\n\n        return "break"\n\n    \n\n    def _select_suggestion(e=None):\n\n        listbox = riga.get(\'_suggestions_listbox\')\n\n        suggestions = riga.get(\'_current_suggestions\', [])\n\n        \n\n        if not listbox:\n\n            return\n\n        \n\n        selection = listbox.curselection()\n\n        if selection and selection[0] < len(suggestions):\n\n            brano_info = suggestions[selection[0]]\n\n            from pathlib import Path\n\n            \n\n            entry_brano.config(state=\'normal\', fg=\'white\')\n\n            entry_brano.delete(0, tk.END)\n\n            entry_brano.insert(0, Path(brano_info[\'path\']).stem.upper())\n\n            entry_brano.config(state=\'readonly\')\n\n            \n\n            riga[\'path\'] = brano_info[\'path\']\n\n            \n\n            durata_str = self._calcola_durata(brano_info[\'path\'])\n\n            if riga.get(\'durata_label\'):\n\n                riga[\'durata_label\'].config(text=durata_str)\n\n            \n\n            _hide_suggestions()\n\n            self.salva_righe()\n\n            \n\n            entry_brano.unbind(\'<KeyRelease>\')\n\n            entry_brano.unbind(\'<FocusIn>\')\n\n            entry_brano.unbind(\'<FocusOut>\')\n\n    \n\n    def on_enter(e):\n\n        listbox = riga.get(\'_suggestions_listbox\')\n\n        if listbox and listbox.curselection():\n\n            _select_suggestion()\n\n        elif riga.get(\'_current_suggestions\'):\n\n            listbox = riga.get(\'_suggestions_listbox\')\n\n            if listbox and listbox.size() > 0:\n\n                listbox.selection_set(0)\n\n                _select_suggestion()\n\n    \n\n    def on_escape(e):\n\n        _hide_suggestions()\n\n    \n\n    entry_brano.bind(\'<Button-1>\', on_click)\n\n    entry_brano.bind(\'<FocusIn>\', on_focus_in)\n\n    entry_brano.bind(\'<FocusOut>\', on_focus_out)\n\n    # ✅ Debounce autocomplete (200ms) per evitare lag con 263k+ brani\n    _brano_debounce_id = [None]\n    def _debounce_key_release(e):\n        if _brano_debounce_id[0]:\n            self.parent.after_cancel(_brano_debounce_id[0])\n        _brano_debounce_id[0] = self.parent.after(200, lambda: on_key_release(e))\n    entry_brano.bind(\'<KeyRelease>\', _debounce_key_release)\n\n    entry_brano.bind(\'<Return>\', on_enter)\n\n    entry_brano.bind(\'<Down>\', _navigate_suggestions)\n\n    entry_brano.bind(\'<Up>\', _navigate_suggestions)\n\n    entry_brano.bind(\'<Escape>\', on_escape)\n\n\n'
 
 
 def _spenta():
@@ -14,159 +25,11 @@ def _spenta():
         return False
 
 
-def _pezzi(testo):
-    """La query spezzata come la spezza il campo in alto: '*' oppure spazi,
-    e un pezzo che comincia con '.' e' un'estensione."""
-    t = (testo or '').lower().strip()
-    if '*' in t:
-        grezzi = [p.strip() for p in t.split('*') if p.strip()]
-    else:
-        grezzi = [p for p in re.split(r'\s+', t) if p]
-    parti, ext = [], []
-    for p in grezzi:
-        if p.startswith('.'):
-            parti.append(p[1:])
-            ext.append(True)
-        else:
-            parti.append(p)
-            ext.append(False)
-    return parti, ext
-
-
-def _lista_corta(self, testo):
-    """I brani candidati, presi dalla tabella della 016. None se non si puo'.
-
-    ⚠️ La funzione originale RIFILTRA con lo stesso criterio, quindi qui basta
-    darle i candidati giusti: quello che esce sullo schermo lo decide sempre
-    lei. Se la tabella non c'e' - archivio sotto i 100.000 brani, o tabella non
-    ancora pronta - si torna None e non si tocca niente.
-    """
-    parti, ext = _pezzi(testo)
-    if not parti or len(''.join(parti)) < 2:
-        return None
-    brani = getattr(self, 'brani_pc', None) or ()
-    if not brani:
-        return None
-    try:
-        righe = self._cerca_in_tabella_016(parti, ext, brani, TETTO)
-    except Exception:
-        righe = None
-    if righe is None:
-        try:
-            self._prepara_tabella_016()      # come fa il campo in alto
-        except Exception:
-            pass
-        return None
-    return [brani[i] for i in righe]
-
-
-def _cattura_key_release(widget, quando_pronto):
-    """Prende la funzione che l'originale ha agganciato a <KeyRelease>.
-
-    Non si puo' chiedere a Tk quale funzione Python c'e' dietro un binding, e
-    quella dell'originale e' una funzione interna: si intercetta `bind` mentre
-    l'originale la registra. Fuori dalla finestra di cattura `bind` torna
-    quello di sempre.
-    """
-    import tkinter as tk
-    originale = tk.Misc.bind
-    preso = {}
-
-    def bind(self, sequence=None, func=None, add=None):
-        esito = originale(self, sequence, func, add)
-        if func is not None and str(sequence) == '<KeyRelease>':
-            preso['w'] = self
-            preso['f'] = func
-        return esito
-
-    tk.Misc.bind = bind
-    try:
-        esito = quando_pronto()
-    finally:
-        tk.Misc.bind = originale
-    return preso.get('w'), preso.get('f'), esito
-
-
-def _legge_i_brani(f):
-    """Vero se quella funzione, dentro, va a leggere `brani_pc`."""
-    try:
-        co = f.__code__
-        if 'brani_pc' in co.co_names:
-            return True
-        for c in co.co_consts:                # anche le sue funzioni interne
-            if hasattr(c, 'co_names') and 'brani_pc' in c.co_names:
-                return True
-    except Exception:
-        pass
-    return False
-
-
-def _dentro_la_chiusura(funzione):
-    """La funzione che fa DAVVERO la ricerca, chiusa dentro quella del tasto.
-
-    Il tasto e' agganciato a una funzione che aspetta 200 ms e poi ne chiama
-    un'altra: chiamando noi quella seconda possiamo metterle davanti la lista
-    corta e toglierla subito dopo, senza rincorrere i tempi.
-
-    ⚠️ Si cerca per COMPORTAMENTO, non per nome: i due campi della scaletta
-    chiamano le loro `on_key_release` e `_do_search`, e un domani potrebbero
-    chiamarsi ancora diversamente. Si prende la prima funzione della chiusura
-    che va a leggere `brani_pc` - che e' esattamente quella da accorciare.
-    """
-    try:
-        for c in (funzione.__closure__ or ()):
-            v = c.cell_contents
-            if callable(v) and _legge_i_brani(v):
-                return v
-    except Exception:
-        pass
-    return None
-
-
-def _aggancia_riga(self, entry, debounce):
-    """Rimpiazza il tasto del campo con uno che passa dalla tabella."""
-    import tkinter as tk
-
-    vero = _dentro_la_chiusura(debounce)
-    if vero is None:
-        return False                 # non si e' capito: si lascia com'era
-
-    ritardo = {'id': None}
-
-    def lavora(e):
-        ritardo['id'] = None
-        try:
-            testo = entry.get().lower().strip()
-        except Exception:
-            testo = ''
-        corta = None
-        try:
-            corta = _lista_corta(self, testo)
-        except Exception:
-            corta = None
-        if corta is None:
-            vero(e)
-            return
-        pieni = self.brani_pc
-        self.brani_pc = corta
-        try:
-            vero(e)              # legge brani_pc SUBITO, poi lancia il thread
-        finally:
-            self.brani_pc = pieni
-
-    def al_tasto(e):
-        if e.keysym in ('Up', 'Down', 'Return', 'Escape'):
-            return
-        if ritardo['id']:
-            try:
-                self.parent.after_cancel(ritardo['id'])
-            except Exception:
-                pass
-        ritardo['id'] = self.parent.after(ATTESA, lambda: lavora(e))
-
-    entry.unbind('<KeyRelease>')
-    entry.bind('<KeyRelease>', al_tasto)
-    return True
+def _metti(C, spazio):
+    if not hasattr(C, '_orig_024'):
+        C._orig_024 = C._setup_brano_autocomplete
+    exec(compile(CODICE, "<patch024>", "exec"), spazio)
+    setattr(C, '_setup_brano_autocomplete', spazio['_setup_brano_autocomplete'])
 
 
 def apply():
@@ -178,42 +41,26 @@ def apply():
         import time
 
         def quando_c_e():
-            # ⚠️ Non si importa moduli.libreria durante apply_all: tirerebbe
+            # ⚠️ moduli.libreria NON si importa durante l'avvio: tirerebbe
             #    dentro mezzo programma prima che sia pronto. Si aspetta che
-            #    la classe esista davvero (durante l'import il modulo e' gia'
+            #    la classe ci sia davvero (durante l'import il modulo e' gia'
             #    in sys.modules ma ancora mezzo vuoto).
-            for _ in range(1200):            # due minuti al massimo
+            for _ in range(1800):              # tre minuti al massimo
                 time.sleep(0.1)
                 m = sys.modules.get('moduli.libreria')
                 C = getattr(m, 'LibreriaSlider', None) if m else None
                 if C is None or not hasattr(C, '_setup_brano_autocomplete'):
                     continue
-                if hasattr(C, '_orig_024__setup_brano_autocomplete'):
+                if hasattr(C, '_orig_024'):
                     return
-
-                # I DUE campi della scaletta: quello della riga nuova e
-                # quello che si apre modificando un brano gia' in tabella.
-                # Struttura diversa (uno chiama on_key_release, l'altro
-                # _do_search) ma stesso schema: il tasto -> attesa -> ricerca.
-                for _nome in ('_setup_brano_autocomplete', '_sc_edit_brano'):
-                    if not hasattr(C, _nome):
-                        continue
-                    _marchio = '_orig_024_' + _nome
-                    if hasattr(C, _marchio):
-                        continue
-                    setattr(C, _marchio, getattr(C, _nome))
-
-                    def avvolto(self, *a, _orig=getattr(C, _marchio), **k):
-                        entry, debounce, esito = _cattura_key_release(
-                            None, lambda: _orig(self, *a, **k))
-                        try:
-                            if entry is not None and debounce is not None:
-                                _aggancia_riga(self, entry, debounce)
-                        except Exception:
-                            pass
-                        return esito
-
-                    setattr(C, _nome, avvolto)
+                if not hasattr(C, '_cerca_in_tabella_016'):
+                    continue                   # la 016 non e' ancora entrata
+                try:
+                    _metti(C, m.__dict__)
+                    print("patch 024: la ricerca nelle righe della scaletta "
+                          "passa dalla tabella")
+                except Exception as e:
+                    print("patch 024: %s" % e)
                 return
 
         threading.Thread(target=quando_c_e, daemon=True,
@@ -228,20 +75,17 @@ def revert():
         import sys
         m = sys.modules.get('moduli.libreria')
         C = getattr(m, 'LibreriaSlider', None) if m else None
-        fatto = False
-        for nome in ('_setup_brano_autocomplete', '_sc_edit_brano'):
-            marchio = '_orig_024_' + nome
-            if C is not None and hasattr(C, marchio):
-                setattr(C, nome, getattr(C, marchio))
-                delattr(C, marchio)
-                fatto = True
-        return fatto
-    except Exception:
-        pass
+        if C is not None and hasattr(C, '_orig_024'):
+            setattr(C, '_setup_brano_autocomplete', C._orig_024)
+            del C._orig_024
+            print("patch 024: rimesso l'originale")
+            return True
+    except Exception as e:
+        print("revert 024: %s" % e)
     return False
 
 
 try:
     apply()
-except Exception:
-    pass
+except Exception as _e:
+    print("patch 024: %s" % _e)
