@@ -21,6 +21,7 @@
     "025_diario_di_bordo.py",
     "027_spia_timing_midi.py",
     "028_dice_chi_e_questo_pc.py",
-    "029_ricerca_riga_vera.py"
+    "029_ricerca_riga_vera.py",
+    "030_youtube_senza_karaoke.py"
   ]
 }
