@@ -131,6 +131,36 @@ def _accendi(serial):
         except Exception:
             pass
 
+        # ⭐ I file di traccia scritti PRIMA che il diario si accendesse.
+        #    Le patch lavorano all'avvio, quando qui non si stava ancora
+        #    ascoltando: senza questo, il pezzo piu' interessante - perche'
+        #    una patch non e' entrata in funzione - non si vedrebbe mai.
+        import os
+        base = os.path.join(os.environ.get('LOCALAPPDATA') or
+                            os.path.expanduser('~'), 'KaraDom')
+        da_leggere = [os.path.join(base, n) for n in os.listdir(base)
+                      if n.endswith('.log')] if os.path.isdir(base) else []
+        try:
+            from moduli.licensing import _get_base_internal_path
+            crash = os.path.join(str(_get_base_internal_path().parent),
+                                 'log', 'crash_startup.log')
+            if os.path.isfile(crash):
+                da_leggere.append(crash)
+        except Exception:
+            pass
+        for f in da_leggere[:6]:
+            try:
+                righe = open(f, encoding='utf-8', errors='replace').read().splitlines()
+                if not righe:
+                    continue
+                print("[diario] --- %s (ultime %d righe) ---"
+                      % (os.path.basename(f), min(20, len(righe))))
+                for r in righe[-20:]:
+                    if r.strip():
+                        print("[diario]   " + r[:400])
+            except Exception:
+                pass
+
     def gira():
         apri_bocca()
         while True:
