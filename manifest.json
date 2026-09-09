@@ -16,6 +16,7 @@
     "020_backup_cartella_giusta.py",
     "021_cerca_aggiornamenti.py",
     "022_pannello_aggiornato.py",
-    "023_midi_soft_karaoke.py"
+    "023_midi_soft_karaoke.py",
+    "024_ricerca_riga_scaletta.py"
   ]
 }
