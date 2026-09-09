@@ -88,6 +88,24 @@ def stato_completo():
         except Exception:
             return None
 
+    def impronta(percorso):
+        """La STESSA impronta che git tiene per quel file.
+
+        Serve a distinguere una patch aggiornata da una vecchia: senza, il
+        pannello vede solo il numero e chi ha la 017 di ieri sembra a posto
+        come chi ha quella di oggi. Si calcola come git: sha1 di
+        'blob <lunghezza>\\0' + contenuto, con i fine riga a LF (e' quello che
+        sta sul server). Cosi' il pannello confronta con una sola chiamata."""
+        import hashlib
+        try:
+            d = open(percorso, 'rb').read().replace(b'\r\n', b'\n')
+            h = hashlib.sha1()
+            h.update(b'blob %d\x00' % len(d))
+            h.update(d)
+            return h.hexdigest()[:8]
+        except Exception:
+            return ''
+
     fuori = {}
     for nome in file:
         corto = (str(nome).split('_', 1)[0] or str(nome))[:16]
@@ -107,6 +125,9 @@ def stato_completo():
             fuori[corto] = [0, 'firma non valida']
         else:
             fuori[corto] = [0, 'firma mancante']
+
+        # terza voce: QUALE versione di quella patch e' su questo PC
+        fuori[corto].append(impronta(percorso))
 
     return fuori
 
