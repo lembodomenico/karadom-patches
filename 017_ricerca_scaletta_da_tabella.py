@@ -37,6 +37,14 @@ def _lista_corta_017(self, query, tetto):
         return None
     righe = _cerca_nome_017(self, query, tetto)
     if righe is None:
+        # Lo stesso metodo della ricerca in alto: se la tabella non c'e'
+        # ancora la si CHIEDE, e per stavolta si cerca come sempre. Senza
+        # questo la tabella non arrivava mai da questa strada, e la ricerca
+        # in scaletta restava lenta finche' non si digitava nel filtro.
+        try:
+            self._prepara_tabella_016()
+        except Exception:
+            pass
         return None
     brani = self.brani_pc
     return [brani[i] for i in righe]
