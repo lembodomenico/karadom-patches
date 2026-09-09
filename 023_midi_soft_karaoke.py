@@ -123,6 +123,101 @@ def _copia_senza_lyric(percorso):
     return nuovo
 
 
+def _impronta(t):
+    return ''.join(c for c in str(t).upper() if c.isalnum())
+
+
+def _righe_dei_lyric(percorso):
+    """Le righe della traccia LYRIC, col loro tempo in millisecondi."""
+    import mido
+    # scorrendo il file mido da' l'attesa fra un messaggio e l'altro, in
+    # secondi e gia' col tempo applicato: sommandole si ha il tempo assoluto.
+    fuori = []
+    t = 0.0
+    for msg in mido.MidiFile(percorso):
+        t += msg.time
+        if getattr(msg, 'type', '') == 'lyrics':
+            fuori.append((int(t * 1000), msg.text))
+    return fuori
+
+
+def _rimetti_le_righe_perse(self, percorso):
+    """Le fonti si FONDONO, non si scelgono.
+
+    La traccia dei LYRIC puo' avere righe che il Soft Karaoke non ha: in
+    "PIANO PIANO DOLCE" la prima riga cantata sta SOLO li', perche' la
+    traccia Words comincia dopo. Scegliendo il Soft Karaoke e basta, quella
+    riga spariva dallo schermo. Si rimettono davanti solo le righe che
+    vengono PRIMA dell'inizio del testo e che non ci sono gia' - il confronto
+    ignora spazi, apostrofi e maiuscole, perche' le due tracce scrivono lo
+    stesso verso in modo un po' diverso ("NON E VITA" / "NON E' VITA").
+    """
+    syl = getattr(self, 'syllables_data', None)
+    if not syl:
+        return 0
+    viste = set()
+    riga = ''
+    for s, _t in syl:
+        if s == '\n':
+            if riga.strip():
+                viste.add(_impronta(riga))
+            riga = ''
+        else:
+            riga += s
+    if riga.strip():
+        viste.add(_impronta(riga))
+
+    inizio = syl[0][1]
+    davanti = []
+    for ms, testo in _righe_dei_lyric(percorso):
+        t = str(testo).lstrip('<\\/').strip()
+        if not t or ms >= inizio:
+            continue
+        if _impronta(t) in viste:
+            continue
+        viste.add(_impronta(t))
+        davanti.append((t, ms))
+        davanti.append(('\n', ms))
+    if davanti:
+        self.syllables_data = davanti + syl
+        try:
+            self.full_text = "".join(s[0] for s in self.syllables_data)
+        except Exception:
+            pass
+    return len(davanti) // 2
+
+
+def _soglia_adatta(syllables, minimo=3000):
+    """Quanto dev'essere lunga una pausa per valere come stacco strumentale.
+
+    Con 3 secondi fissi, su un brano lento - righe ogni 8 secondi - ogni
+    intervallo supera la soglia e finisce una riga vuota FRA TUTTE le righe.
+    Uno stacco non e' "una pausa di 3 secondi", e' una pausa molto piu' lunga
+    del respiro normale di quel brano.
+
+    ⚠️ Il respiro si misura sul PRIMO QUARTILE, non sulla mediana: in un brano
+    con molte pause meta' dei salti SONO pause, e la mediana finirebbe sopra
+    tutte - misurato, spariva ogni stacco (25 righe vuote diventavano 0).
+    """
+    salti = []
+    ultimo = None
+    a_capo = False
+    for s, t in syllables:
+        if s == '\n':
+            a_capo = True
+            continue
+        if not s.strip():
+            continue
+        if a_capo and ultimo is not None:
+            salti.append(t - ultimo)
+        a_capo = False
+        ultimo = t
+    salti = sorted(x for x in salti if x > 0)
+    if len(salti) < 4:
+        return minimo
+    return max(minimo, int(salti[len(salti) // 4] * 2.5))
+
+
 def apply():
     if _spenta():
         return False
@@ -130,28 +225,51 @@ def apply():
         import os
         from moduli.engine import KaraokeTextEngine as C
 
-        if not hasattr(C, 'extract_midi') or hasattr(C, '_orig_023_midi'):
-            return hasattr(C, '_orig_023_midi')
-        C._orig_023_midi = C.extract_midi
+        fatto = False
 
-        def extract_midi(self, filepath, _orig=C._orig_023_midi):
-            nuovo = None
-            try:
-                nuovo = _copia_senza_lyric(filepath)
-            except Exception:
-                nuovo = None
-            if not nuovo:
-                return _orig(self, filepath)
-            try:
-                return _orig(self, nuovo)
-            finally:
+        if hasattr(C, '_add_instrumental_breaks') and not hasattr(C, '_orig_023_stacchi'):
+            C._orig_023_stacchi = C._add_instrumental_breaks
+
+            def _add_instrumental_breaks(self, syllables, min_gap_ms=3000,
+                                         _orig=C._orig_023_stacchi):
                 try:
-                    os.remove(nuovo)
+                    min_gap_ms = _soglia_adatta(syllables, min_gap_ms)
                 except Exception:
                     pass
+                return _orig(self, syllables, min_gap_ms)
 
-        C.extract_midi = extract_midi
-        return True
+            C._add_instrumental_breaks = _add_instrumental_breaks
+            fatto = True
+
+        if hasattr(C, 'extract_midi') and not hasattr(C, '_orig_023_midi'):
+            C._orig_023_midi = C.extract_midi
+
+            def extract_midi(self, filepath, _orig=C._orig_023_midi):
+                nuovo = None
+                try:
+                    nuovo = _copia_senza_lyric(filepath)
+                except Exception:
+                    nuovo = None
+                if not nuovo:
+                    return _orig(self, filepath)
+                try:
+                    esito = _orig(self, nuovo)
+                    if esito:
+                        try:
+                            _rimetti_le_righe_perse(self, filepath)
+                        except Exception:
+                            pass
+                    return esito
+                finally:
+                    try:
+                        os.remove(nuovo)
+                    except Exception:
+                        pass
+
+            C.extract_midi = extract_midi
+            fatto = True
+
+        return fatto or hasattr(C, '_orig_023_midi')
     except Exception:
         return False
 
@@ -159,13 +277,18 @@ def apply():
 def revert():
     try:
         from moduli.engine import KaraokeTextEngine as C
+        fatto = False
         if hasattr(C, '_orig_023_midi'):
             C.extract_midi = C._orig_023_midi
             del C._orig_023_midi
-            return True
+            fatto = True
+        if hasattr(C, '_orig_023_stacchi'):
+            C._add_instrumental_breaks = C._orig_023_stacchi
+            del C._orig_023_stacchi
+            fatto = True
+        return fatto
     except Exception:
-        pass
-    return False
+        return False
 
 
 try:
