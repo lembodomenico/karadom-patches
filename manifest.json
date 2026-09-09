@@ -19,6 +19,7 @@
     "023_midi_soft_karaoke.py",
     "024_ricerca_riga_scaletta.py",
     "025_diario_di_bordo.py",
-    "027_spia_timing_midi.py"
+    "027_spia_timing_midi.py",
+    "028_dice_chi_e_questo_pc.py"
   ]
 }
