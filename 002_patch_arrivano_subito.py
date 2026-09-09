@@ -160,11 +160,30 @@ def check_and_update_patches(parent_window=None):
                           % (os.path.basename(percorso), e))
 
             # ritiro: via i file locali non piu' nel manifest
+            #
+            # ⛔ ECCEZIONE: le patch messe a mano per PROVARLE su una sola
+            #    macchina hanno accanto un file `.prova` e non si toccano.
+            #    Senza, venivano applicate all'avvio e cancellate subito dopo
+            #    da qui: al riavvio non c'erano piu' e sembrava che la patch
+            #    non si applicasse mai. Il ritiro vero - quello che serve a
+            #    togliere una patch ai clienti - non cambia di una virgola:
+            #    quel file sul PC di un cliente non c'e'.
             try:
                 for f in os.listdir(d):
-                    if (f.endswith(".py") or f.endswith(".py.sig")) and f not in attesi:
+                    if not (f.endswith(".py") or f.endswith(".py.sig")):
+                        continue
+                    if f in attesi:
+                        continue
+                    base = f[:-4] if f.endswith(".py.sig") else f
+                    if os.path.exists(os.path.join(d, base + ".prova")):
+                        continue
+                    try:
                         os.remove(os.path.join(d, f))
                         print("🧹 patch rimossa (ritirata): %s" % f)
+                    except Exception as e:
+                        # un file che non si lascia cancellare non deve
+                        # fermare il ritiro di tutti gli altri
+                        print("⚠️ non rimossa: %s (%s)" % (f, e))
             except Exception:
                 pass
         except Exception as e:
