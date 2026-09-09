@@ -25,23 +25,45 @@ def _spenta():
         return False
 
 
+def traccia(testo):
+    """Una riga su file. Nell'eseguibile compilato i messaggi a schermo si
+    perdono: senza questo, quando il cliente dice "non va" non c'e' modo di
+    sapere se la patch si e' agganciata o e' morta per strada."""
+    try:
+        import datetime, os
+        d = os.path.join(os.environ.get('LOCALAPPDATA') or
+                         os.path.expanduser('~'), 'KaraDom')
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, 'patch024.log'), 'a', encoding='utf-8') as f:
+            f.write('%s  %s' % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                  testo) + chr(10))
+    except Exception:
+        pass
+
+
 def apply():
     if _spenta():
+        traccia('spenta da patch_024 = 0')
         return False
     try:
         # Come la 016: si importa il modulo e si sostituisce il metodo, subito.
         import moduli.libreria as m
         C = m.LibreriaSlider
         if hasattr(C, '_orig_024'):
+            traccia('gia' + chr(39) + ' agganciata')
             return True
+        if not hasattr(C, '_cerca_in_tabella_016'):
+            traccia('la 016 non e' + chr(39) + ' attiva: senza tabella non si aggancia')
+            return False
         C._orig_024 = C._setup_brano_autocomplete
         spazio = m.__dict__
         exec(compile(CODICE, "<patch024>", "exec"), spazio)
         setattr(C, '_setup_brano_autocomplete', spazio['_setup_brano_autocomplete'])
-        print("patch 024: la ricerca nelle righe della scaletta "
-              "passa dalla tabella")
+        traccia('AGGANCIATA: la ricerca nelle righe della scaletta passa dalla tabella')
+        print("patch 024: la ricerca nelle righe della scaletta passa dalla tabella")
         return True
     except Exception as e:
+        traccia('NON agganciata: %s: %s' % (type(e).__name__, e))
         print("patch 024: %s" % e)
         return False
 
