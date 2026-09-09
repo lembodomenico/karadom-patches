@@ -41,7 +41,19 @@ def _contesti():
 
 def _parla(serial, righe=None):
     """Chiede se il debug e' acceso e, gia' che c'e', consegna quello che ha
-    da dire. Ritorna True se il pannello lo vuole acceso."""
+    da dire.
+
+    Tre risposte, non due:
+      True  - il pannello lo vuole acceso
+      False - il pannello lo ha spento
+      None  - NON CI SONO RIUSCITO (rete, timeout, server giu')
+
+    ⛔ La terza non e' un dettaglio: prima "non ci sono riuscito" tornava
+       False come "spento", e al primo intoppo di rete il diario si chiudeva
+       per sempre - misurato, un solo errore e il thread muore. Da quel
+       momento il programma continuava a lavorare senza che nessuno lo
+       ascoltasse piu'.
+    """
     import json
     import urllib.parse
     import urllib.request
@@ -64,7 +76,7 @@ def _parla(serial, righe=None):
             return bool(json.loads(risposta.decode('utf-8', 'replace')).get('on'))
         except Exception:
             continue
-    return False
+    return None         # nessun contesto ha funzionato: non lo so
 
 
 class _Eco(object):
@@ -211,10 +223,21 @@ def _accendi(serial):
                 continue
             pezzo, coda[:] = list(coda), []
             try:
-                if not _parla(serial, pezzo):
-                    return          # spento dal pannello: si smette
+                esito = _parla(serial, pezzo)
             except Exception:
-                pass
+                esito = None
+            if esito is None:
+                # ⛔ Non ci sono riuscito: le righe NON si buttano. Tornano
+                #    in testa alla coda e si riprova al giro dopo. Prima
+                #    sparivano - erano gia' state tolte - e per giunta il
+                #    diario si chiudeva, quindi di tutto quello che il
+                #    programma faceva dopo non restava traccia.
+                coda[:0] = pezzo
+                if len(coda) > MAX_CODA:
+                    del coda[:len(coda) - MAX_CODA]   # le piu' vecchie cedono
+                continue
+            if esito is False:
+                return              # spento dal pannello: si smette davvero
 
     threading.Thread(target=gira, daemon=True, name="Diario025").start()
 
@@ -237,11 +260,23 @@ def apply():
             s = _serial()
             if not s:
                 return
-            try:
-                if _parla(s):
+            # ⚠️ Se al primo colpo la rete non risponde (None) NON si molla:
+            #    all'avvio la connessione puo' non essere ancora pronta, e
+            #    rinunciando li' il debug acceso dal pannello non partiva
+            #    fino al riavvio successivo. Si riprova qualche volta,
+            #    aspettando un po' di piu' ogni giro, poi basta.
+            for attesa in (0, 20, 40, 80, 160):
+                if attesa:
+                    time.sleep(attesa)
+                try:
+                    esito = _parla(s)
+                except Exception:
+                    esito = None
+                if esito is True:
                     _accendi(s)
-            except Exception:
-                pass
+                    return
+                if esito is False:
+                    return          # il pannello dice di stare zitti
 
         threading.Thread(target=chiedi, daemon=True, name="Diario025Avvio").start()
         return True
