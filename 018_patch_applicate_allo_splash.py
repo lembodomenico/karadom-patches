@@ -237,11 +237,15 @@ def _aspetta_lo_splash():
     orig_update = tk.Misc.update
     visto = {}
 
-    def label_init(self, master=None, cnf={}, **kw):
-        orig_label(self, master, cnf, **kw)
+    def label_init(self, *a, **k):
+        # ⛔ Si ripassa TUTTO com'e' arrivato, senza rimettere in fila i
+        #    parametri: qui davanti c'e' gia' la 013, che avvolge le Label a
+        #    modo suo. Passandole `cnf` come secondo posizionale si beccava
+        #    "'dict' object is not callable" e KaraDom NON PARTIVA PIU'.
+        orig_label(self, *a, **k)
         try:
-            if 'label' not in visto and str(kw.get('bg', '')) == BG_SPLASH \
-                    and str(kw.get('fg', '')) == FG_STATO:
+            if 'label' not in visto and str(k.get('bg', '')) == BG_SPLASH \
+                    and str(k.get('fg', '')) == FG_STATO:
                 visto['label'] = self
                 visto['win'] = self.winfo_toplevel()
         except Exception:
