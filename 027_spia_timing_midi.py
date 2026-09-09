@@ -67,8 +67,31 @@ def _accendi_la_spia():
     return 'accesa (log/karadom_debug.log)'
 
 
+def traccia(testo):
+    """Una riga su file.
+
+    ⚠️ Il `print` da solo non basta: qui si parla 4 secondi dopo l'avvio,
+    quando il diario (025) magari sta ancora chiedendo al server se deve
+    ascoltare - e quel messaggio si perde. Su file resta, e il diario lo
+    ripesca al giro dopo.
+    """
+    try:
+        import datetime
+        import os
+        d = os.path.join(os.environ.get('LOCALAPPDATA') or
+                         os.path.expanduser('~'), 'KaraDom')
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, 'patch027.log'), 'a', encoding='utf-8') as f:
+            f.write('%s  %s' % (
+                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                testo) + chr(10))
+    except Exception:
+        pass
+
+
 def apply():
     if _spenta():
+        traccia('spenta da patch_027 = 0')
         return False
     try:
         import threading
@@ -83,9 +106,13 @@ def apply():
             time.sleep(4)
             try:
                 if not _debug_acceso():
+                    traccia('il debug e' + chr(39) + ' spento: spia non accesa')
                     return
-                print("patch 027: spia del timing MIDI %s" % _accendi_la_spia())
+                esito = _accendi_la_spia()
+                traccia('spia del timing MIDI %s' % esito)
+                print("patch 027: spia del timing MIDI %s" % esito)
             except Exception as e:
+                traccia('%s: %s' % (type(e).__name__, e))
                 print("patch 027: %s" % e)
 
         threading.Thread(target=chiedi, daemon=True, name="Spia027").start()
