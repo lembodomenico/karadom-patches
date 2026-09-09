@@ -17,6 +17,7 @@
     "021_cerca_aggiornamenti.py",
     "022_pannello_aggiornato.py",
     "023_midi_soft_karaoke.py",
-    "024_ricerca_riga_scaletta.py"
+    "024_ricerca_riga_scaletta.py",
+    "025_diario_di_bordo.py"
   ]
 }
