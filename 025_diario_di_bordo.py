@@ -142,10 +142,11 @@ def _accendi(serial):
                       if n.endswith('.log')] if os.path.isdir(base) else []
         try:
             from moduli.licensing import _get_base_internal_path
-            crash = os.path.join(str(_get_base_internal_path().parent),
-                                 'log', 'crash_startup.log')
-            if os.path.isfile(crash):
-                da_leggere.append(crash)
+            cartella_log = os.path.join(str(_get_base_internal_path().parent), 'log')
+            for n in ('crash_startup.log', 'karadom_debug.log'):
+                p = os.path.join(cartella_log, n)
+                if os.path.isfile(p):
+                    da_leggere.append(p)
         except Exception:
             pass
         for f in da_leggere[:6]:
@@ -161,10 +162,51 @@ def _accendi(serial):
             except Exception:
                 pass
 
+    # ⭐ La spia del timing del MIDI scrive su FILE, non a schermo: nel
+    #    programma compilato `dbg()` non passa da print, quindi senza seguire
+    #    il file quelle misure - le uniche che dicono quanto il MIDI resta
+    #    indietro - non arriverebbero mai qui.
+    coda_file = {'dove': None, 'letto': 0}
+
+    def segui_il_file():
+        import os
+        if coda_file['dove'] is None:
+            try:
+                from moduli.licensing import _get_base_internal_path
+                p = os.path.join(str(_get_base_internal_path().parent),
+                                 'log', 'karadom_debug.log')
+            except Exception:
+                return
+            if not os.path.isfile(p):
+                return
+            coda_file['dove'] = p
+            coda_file['letto'] = os.path.getsize(p)   # si parte da adesso
+            return
+        p = coda_file['dove']
+        try:
+            quanto = os.path.getsize(p)
+            if quanto < coda_file['letto']:
+                coda_file['letto'] = 0                # il file e' ripartito
+            if quanto <= coda_file['letto']:
+                return
+            with open(p, 'r', encoding='utf-8', errors='replace') as f:
+                f.seek(coda_file['letto'])
+                nuove = f.read()
+                coda_file['letto'] = f.tell()
+            for r in nuove.splitlines():
+                if r.strip():
+                    coda.append(r[:2000])
+        except Exception:
+            pass
+
     def gira():
         apri_bocca()
         while True:
             time.sleep(OGNI)
+            try:
+                segui_il_file()
+            except Exception:
+                pass
             if not coda:
                 continue
             pezzo, coda[:] = list(coda), []
