@@ -127,6 +127,53 @@ def _impronta(t):
     return ''.join(c for c in str(t).upper() if c.isalnum())
 
 
+def _titoli_del_file(dati):
+    """I campi @T: il primo e' il titolo, il secondo l'artista.
+
+    Nei Soft Karaoke il titolo e' SCRITTO nel file. KaraDom invece lo prendeva
+    dalla prima riga del testo, che e' solo il primo verso cantato: su
+    "PIANO PIANO DOCE DOCE" il titolo diventava "PIANO PIANO".
+    """
+    fuori = []
+    try:
+        if dati[:4] != b'MThd':
+            return fuori
+        i = 8 + int.from_bytes(dati[4:8], 'big')
+        while i < len(dati) - 8 and dati[i:i + 4] == b'MTrk':
+            n = int.from_bytes(dati[i + 4:i + 8], 'big')
+            fine = i + 8 + n
+            j = i + 8
+            stato = 0
+            while j < fine:
+                _d, j = _vlq(dati, j)
+                if j >= fine:
+                    break
+                b = dati[j]
+                if b == 0xFF:
+                    tipo = dati[j + 1]
+                    lun, j2 = _vlq(dati, j + 2)
+                    if tipo == 0x01 and dati[j2:j2 + 2] == b'@T':
+                        t = dati[j2 + 2:j2 + lun].decode('latin-1').strip()
+                        if t:
+                            fuori.append(t)
+                    j = j2 + lun
+                    stato = 0
+                    continue
+                if b in (0xF0, 0xF7):
+                    lun, j2 = _vlq(dati, j + 1)
+                    j = j2 + lun
+                    stato = 0
+                    continue
+                if b & 0x80:
+                    stato = b
+                    j += 1
+                j += 1 if (stato & 0xF0) in (0xC0, 0xD0) else 2
+            i = fine
+    except Exception:
+        pass
+    return fuori
+
+
 def _righe_dei_lyric(percorso):
     """Le righe della traccia LYRIC, col loro tempo in millisecondi."""
     import mido
@@ -257,6 +304,14 @@ def apply():
                     if esito:
                         try:
                             _rimetti_le_righe_perse(self, filepath)
+                        except Exception:
+                            pass
+                        try:
+                            _t = _titoli_del_file(open(filepath, 'rb').read())
+                            if _t:
+                                self.title = _t[0][:50]
+                                if len(_t) > 1:
+                                    self.artist = _t[1][:50]
                         except Exception:
                             pass
                     return esito
