@@ -76,58 +76,6 @@ def _aspetta_download(secondi=ATTESA_MAX, battito=None):
         time.sleep(0.05)
 
 
-def _apri_splash():
-    """La finestrella che si vede mentre si scarica e si applica.
-
-    Serve perche' senza di lei quei secondi sono SCHERMO NERO: lo splash della
-    licenza e' gia' stato chiuso e la finestra di KaraDom deve ancora nascere.
-    Torna (finestra, radice creata qui o None, etichetta dello stato).
-
-    ⚠️ Se una radice Tk non c'e' ancora se ne crea una e la si distrugge dopo:
-    e' la stessa cosa che fa lo splash della licenza, e `demo()` costruisce
-    comunque la sua subito dopo.
-    """
-    import tkinter as tk
-    radice = None
-    padre = getattr(tk, '_default_root', None)
-    if padre is None:
-        radice = tk.Tk()
-        radice.withdraw()
-        padre = radice
-
-    w = tk.Toplevel(padre)
-    w.overrideredirect(True)
-    w.configure(bg='#1a1a2e')
-    w.attributes('-topmost', True)
-
-    tk.Label(w, text="KaraDom", font=('Segoe UI', 26, 'bold'),
-             bg='#1a1a2e', fg='#ffffff').pack(padx=60, pady=(30, 0))
-    stato = tk.Label(w, text="Aggiornamenti in corso...",
-                     font=('Segoe UI', 11), bg='#1a1a2e', fg='#aaaacc')
-    stato.pack(padx=60, pady=(10, 30))
-
-    w.update_idletasks()
-    lw, lh = w.winfo_reqwidth(), w.winfo_reqheight()
-    x = (w.winfo_screenwidth() - lw) // 2
-    y = (w.winfo_screenheight() - lh) // 2
-    w.geometry("%dx%d+%d+%d" % (lw, lh, x, y))
-    w.update()
-    return w, radice, stato
-
-
-def _chiudi_splash(w, radice):
-    try:
-        if w is not None:
-            w.destroy()
-    except Exception:
-        pass
-    try:
-        if radice is not None:
-            radice.destroy()
-    except Exception:
-        pass
-
-
 def _riassunto_patch():
     from moduli import hotfix as H
     fuori = {}
@@ -218,60 +166,125 @@ def _fai_partire_il_download():
         pass
 
 
-def _prima_della_finestra():
-    import time
+BG_SPLASH = '#1a1a2e'
+FG_STATO = '#cccccc'
 
-    finestra = radice = stato = None
+
+def _scrivi(label, finestra, testo):
     try:
-        finestra, radice, stato = _apri_splash()
+        if label is not None:
+            label.config(text=testo)
+        if finestra is not None:
+            finestra.update()
     except Exception:
-        finestra = radice = stato = None
+        pass
 
-    def dillo(testo):
-        """Scrive sullo splash e lo tiene vivo: senza update() la finestra
-        resterebbe bianca e Windows la darebbe per bloccata."""
-        try:
-            if stato is not None:
-                stato.config(text=testo)
-            if finestra is not None:
-                finestra.update()
-        except Exception:
-            pass
 
-    def respira():
-        try:
-            if finestra is not None:
-                finestra.update()
-        except Exception:
-            pass
+def _lavora(label=None, finestra=None):
+    """Scarica e applica. Se c'e' lo splash, lo racconta li' dentro."""
+    import time
+    if _fatto.get('si'):
+        return
+    _fatto['si'] = True
 
+    _scrivi(label, finestra, "Cerco aggiornamenti...")
     try:
-        dillo("Cerco aggiornamenti...")
-        try:
-            _fai_partire_il_download()
-        except Exception:
-            pass
-        try:
-            _aspetta_download(ATTESA_MAX, respira)
-        except Exception:
-            pass
+        _fai_partire_il_download()
+    except Exception:
+        pass
+    try:
+        _aspetta_download(ATTESA_MAX, lambda: _scrivi(label, finestra,
+                                                      "Cerco aggiornamenti..."))
+    except Exception:
+        pass
 
-        dillo("Applico gli aggiornamenti...")
+    _scrivi(label, finestra, "Applico gli aggiornamenti...")
+    quante = 0
+    try:
+        quante = _fai_apply_all() or 0
+    except Exception:
         quante = 0
-        try:
-            quante = _fai_apply_all() or 0
-        except Exception:
-            quante = 0
-        if quante:
-            dillo("%d aggiornamenti attivi" % quante)
-            time.sleep(0.8)          # il tempo di leggerlo
-    finally:
-        _chiudi_splash(finestra, radice)
+    if quante:
+        _scrivi(label, finestra, "%d aggiornamenti attivi" % quante)
+        time.sleep(0.5)
 
     try:
         _dillo_al_pannello()
     except Exception:
         pass
+
+
+_fatto = {'si': False}
+
+
+def _aspetta_lo_splash():
+    """Si mette in ascolto della riga di stato dello splash di KaraDom.
+
+    ⛔ Niente finestra nostra: quella si vedeva sopra il programma ed e'
+    sbagliata. Il messaggio va scritto DENTRO lo splash, dove l'utente lo
+    sta gia' guardando.
+
+    Si aspetta la prima `update()` della finestra che contiene quella riga:
+    a quel punto lo splash e' a schermo e nessun widget del programma e'
+    ancora nato, quindi anche le patch che cambiano COME nascono i widget
+    fanno in tempo.
+    """
+    import threading
+    import time
+    import tkinter as tk
+
+    orig_label = tk.Label.__init__
+    orig_update = tk.Misc.update
+    visto = {}
+
+    def label_init(self, master=None, cnf={}, **kw):
+        orig_label(self, master, cnf, **kw)
+        try:
+            if 'label' not in visto and str(kw.get('bg', '')) == BG_SPLASH \
+                    and str(kw.get('fg', '')) == FG_STATO:
+                visto['label'] = self
+                visto['win'] = self.winfo_toplevel()
+        except Exception:
+            pass
+
+    def update(self):
+        esito = orig_update(self)
+        try:
+            if visto.get('win') is not None and self is visto['win'] \
+                    and not _fatto.get('si'):
+                tk.Label.__init__ = orig_label
+                tk.Misc.update = orig_update
+                _lavora(visto.get('label'), visto.get('win'))
+        except Exception:
+            pass
+        return esito
+
+    tk.Label.__init__ = label_init
+    tk.Misc.update = update
+
+    # Rete di sicurezza: se lo splash non arriva (build diverse, avvio strano)
+    # il lavoro si fa lo stesso, senza scriverlo da nessuna parte.
+    def rinuncia():
+        time.sleep(12)
+        if not _fatto.get('si'):
+            try:
+                tk.Label.__init__ = orig_label
+                tk.Misc.update = orig_update
+            except Exception:
+                pass
+            _lavora()
+
+    threading.Thread(target=rinuncia, daemon=True, name="PatchRipiego018").start()
+
+
+def _prima_della_finestra():
+    try:
+        _aspetta_lo_splash()
+    except Exception:
+        try:
+            _lavora()
+        except Exception:
+            pass
 
 
 def apply():
