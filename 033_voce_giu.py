@@ -262,6 +262,19 @@ def apply():
                                             _orig=_cls.extract_midi, _mt=_mt,
                                             _quando=_prima_nota_ms):
                 esito = _orig(self, filepath)
+                # ⛔⛔ I CREDITI RESTANO (utente, 12-09: "rimetti a posto i
+                #     crediti"). Non erano loro a far arrivare tardi le parole:
+                #     il ritardo veniva dagli A CAPO messi dopo la parola che
+                #     segue. Qui non si toglie niente se non lo si chiede
+                #     apposta con `midi_togli_crediti = 1`.
+                try:
+                    from moduli.database import Database
+                    _si = str(Database.get_config('midi_togli_crediti', '0')
+                              ).strip() in ('1', 'si', 'on')
+                except Exception:
+                    _si = False
+                if not _si:
+                    return esito
                 try:
                     voci = getattr(self, 'syllables_data', None)
                     if esito and voci:
@@ -270,8 +283,7 @@ def apply():
                         if tolte:
                             self.syllables_data = nuove
                             self.full_text = ''.join(s[0] for s in nuove)
-                            traccia('intestazione: tolte %d voci di crediti '
-                                    'prima della musica' % tolte)
+                            traccia('intestazione: tolte %d voci di crediti' % tolte)
                 except Exception as _e2:
                     traccia('intestazione non tolta: %s' % _e2)
                 return esito
