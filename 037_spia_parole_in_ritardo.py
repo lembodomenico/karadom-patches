@@ -187,7 +187,12 @@ def _guarda(sistema):
         traccia('parte "%s" | motore %s | %d sillabe | prima sillaba a %s ms'
                 % (nome[:60], motore, len(sillabe),
                    prima if prima is not None else '?'))
-        if motore != 'EXPANDER':
+        if motore == 'EXPANDER':
+            # ⭐ LA RIGA CHE MANCAVA: col programma a tempo (deriva -1 ms,
+            #    misurata il 12-09) il disallineamento puo' nascere solo qui,
+            #    da COME escono le note verso l'expander.
+            traccia('expander: %s' % _come_suona_l_expander(sistema))
+        else:
             traccia('niente expander: %s' % _perche_non_expander())
     except Exception as e:
         traccia('non riesco a leggere il brano: %s' % e)
