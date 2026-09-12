@@ -25,6 +25,7 @@
     "030_youtube_senza_karaoke.py",
     "032_tonalita_basi_online.py",
     "033_voce_giu.py",
-    "037_spia_parole_in_ritardo.py"
+    "037_spia_parole_in_ritardo.py",
+    "038_expander_niente_anticipo.py"
   ]
 }
