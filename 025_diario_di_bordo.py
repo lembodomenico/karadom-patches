@@ -178,21 +178,71 @@ def _accendi(serial):
     #    programma compilato `dbg()` non passa da print, quindi senza seguire
     #    il file quelle misure - le uniche che dicono quanto il MIDI resta
     #    indietro - non arriverebbero mai qui.
-    coda_file = {'dove': None, 'letto': 0}
+    coda_file = {'dove': None, 'letto': 0, 'detto': False}
+
+    def _posti_del_registro():
+        """Tutti i posti dove puo' stare `log\\karadom_debug.log`.
+
+        ⛔⛔ IL DIFETTO CHE HA FATTO PERDERE UNA MATTINATA (12-09): si guardava
+            SOLO in `_get_base_internal_path().parent`. Da quando la licenza
+            sta in %LOCALAPPDATA%\\KaraDom\\_internal, quel `.parent` non e'
+            piu' la cartella del programma: e' la stessa trappola che aveva
+            gia' fatto sparire i backup. Il registro invece lo scrive
+            `debug_logger.init_debug()` accanto all'ESEGUIBILE
+            (`os.path.dirname(sys.argv[0])`), quindi non lo si trovava mai —
+            e il diario usciva in silenzio. Il cliente suonava i MIDI e qui non
+            arrivava niente: *"il midi l'ha suonato e tu non lo vedi"*.
+        """
+        import os
+        import sys
+        posti = []
+        try:
+            posti.append(os.path.dirname(os.path.abspath(sys.argv[0])))
+        except Exception:
+            pass
+        try:
+            posti.append(os.path.dirname(os.path.abspath(sys.executable)))
+        except Exception:
+            pass
+        try:
+            from moduli.licensing import _get_base_internal_path
+            posti.append(str(_get_base_internal_path().parent))
+        except Exception:
+            pass
+        try:
+            posti.append(os.path.join(os.environ.get('LOCALAPPDATA') or
+                                      os.path.expanduser('~'), 'KaraDom'))
+        except Exception:
+            pass
+        try:
+            posti.append(os.getcwd())
+        except Exception:
+            pass
+        fuori, visti = [], set()
+        for d in posti:
+            if not d or d in visti:
+                continue
+            visti.add(d)
+            fuori.append(os.path.join(d, 'log', 'karadom_debug.log'))
+        return fuori
 
     def segui_il_file():
         import os
         if coda_file['dove'] is None:
-            try:
-                from moduli.licensing import _get_base_internal_path
-                p = os.path.join(str(_get_base_internal_path().parent),
-                                 'log', 'karadom_debug.log')
-            except Exception:
-                return
-            if not os.path.isfile(p):
-                return
-            coda_file['dove'] = p
-            coda_file['letto'] = os.path.getsize(p)   # si parte da adesso
+            posti = _posti_del_registro()
+            for p in posti:
+                if os.path.isfile(p):
+                    coda_file['dove'] = p
+                    coda_file['letto'] = os.path.getsize(p)  # si parte da adesso
+                    coda.append('[diario] seguo il registro: %s' % p)
+                    return
+            # ⭐ E SE NON C'E', SI DICE. Il silenzio e' quello che ci ha fatto
+            #    cercare il guasto dalla parte sbagliata: sembrava che il
+            #    cliente non avesse suonato niente.
+            if not coda_file['detto']:
+                coda_file['detto'] = True
+                coda.append('[diario] il registro non c-e- ancora; guardo in: '
+                            + ' | '.join(posti[:4]))
             return
         p = coda_file['dove']
         try:
