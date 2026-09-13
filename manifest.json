@@ -23,7 +23,14 @@
     "029_ricerca_riga_vera.py",
     "030_youtube_senza_karaoke.py",
     "032_tonalita_basi_online.py",
+    "034_video_catalogo_midi.py",
     "037_spia_parole_in_ritardo.py",
-    "042_catalogo_piu_veloce.py"
+    "042_catalogo_piu_veloce.py",
+    "043_catalogo_nomi_svelti.py",
+    "044_doppio_invio_avvia.py",
+    "045_catalogo_in_sottofondo.py",
+    "046_devocalizza_abbonati.py",
+    "047_numero_nel_nome.py",
+    "048_registrazione_e_info.py"
   ]
 }
