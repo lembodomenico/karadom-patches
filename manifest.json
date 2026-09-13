@@ -32,6 +32,7 @@
     "046_devocalizza_abbonati.py",
     "047_numero_nel_nome.py",
     "048_registrazione_e_info.py",
-    "049_registrazione_formato.py"
+    "049_registrazione_formato.py",
+    "050_expander_non_blocca.py"
   ]
 }
