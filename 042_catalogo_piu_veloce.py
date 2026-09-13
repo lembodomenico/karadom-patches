@@ -1,5 +1,4 @@
-# 042 - il catalogo remoto si manda a gruppi grandi e in parallelo, e se si
-# interrompe riprende da dove era arrivato.
+# 042 - catalogo piu' veloce
 
 import os
 import threading
@@ -24,14 +23,11 @@ def traccia(testo):
         pass
 
 
-# ⛔ Il limite dell'API: `catalogo_api.php` risponde "troppi" oltre 2000 brani
-#    in una richiesta. Si sta a 1500 per avere margine.
 PER_VOLTA = 1500
 FILI = 8
 
 
 def _archivio():
-    """Dove si segna quello che il server ha GIA' preso."""
     d = os.path.join(os.environ.get('LOCALAPPDATA') or
                      os.path.expanduser('~'), 'KaraDom')
     try:
@@ -55,18 +51,6 @@ def _gia_mandati():
 
 
 def apply():
-    """Sostituisce `catalogo_remoto.manda` con la versione svelta.
-
-    Il tempo non se ne andava in conti: se ne andava ad ASPETTARE il server,
-    un gruppo di 300 per volta, in fila. Su 17.000 brani sono 57 attese, e
-    ⛔ a ogni richiesta il server RILEGGE TUTTO IL CATALOGO per il controllo
-       dei doppioni: quindi i gruppi piccoli costano due volte.
-    Gruppi da 1500 e otto in volo insieme: 12 richieste invece di 57, in due
-    ondate. Misurato sul banco: 28 volte piu' svelto.
-
-    E ogni gruppo confermato si segna su disco SUBITO: se cade la rete o si
-    chiude il programma, il giro dopo riparte da li'.
-    """
     try:
         import sys
         mod = sys.modules.get('moduli.catalogo_remoto')
@@ -112,9 +96,6 @@ def apply():
             def _uno(pezzo):
                 if guaio or (fermati and fermati()):
                     return
-                # ⭐ si dice SUBITO che il gruppo e' partito: coi gruppi grandi
-                #    l'attesa e' la parte lunga, e senza questo la finestra
-                #    resta ferma sullo stesso numero e sembra bloccata
                 with chiave:
                     conto['partiti'] = conto.get('partiti', 0) + 1
                     conto['in_volo'] = conto.get('in_volo', 0) + 1
@@ -136,8 +117,6 @@ def apply():
                     conto['totale'] = int(esito.get('totale')
                                           or conto['totale'])
                     quanti[0] += len(pezzo)
-                    # ⚠️ si segna SOLO ORA: segnare prima vorrebbe dire dare
-                    #    per inviato un gruppo che magari non e' mai arrivato
                     try:
                         with open(_archivio(), 'a', encoding='utf-8') as f:
                             f.write(''.join('%s\n' % _segno(b) for b in pezzo))
@@ -156,7 +135,6 @@ def apply():
 
         manda._veloce042 = True
         mod.manda = manda
-        # e anche dove se l'era gia' preso con `from ... import manda`
         try:
             opz = sys.modules.get('moduli.opzioni')
             if opz is not None and hasattr(opz, 'manda'):
@@ -173,15 +151,6 @@ def apply():
 
 
 def _mostra_che_lavora():
-    """Fa SCORRERE i numeri nella finestra delle Opzioni.
-
-    ⛔ Il guadagno di velocita' da solo non basta a chi guarda: coi gruppi
-       grandi l'avviso arriva una dozzina di volte in tutto, e fra l'uno e
-       l'altro la scritta non cambia — sembra bloccato. Qui si avvolge
-       `_popola_catalogo_remoto` e si aggiunge un orologio che ogni mezzo
-       secondo riscrive la riga con i dati piu' freschi e i secondi che
-       passano, piu' un trattino che gira.
-    """
     try:
         import sys
         import time as _tm
@@ -201,8 +170,6 @@ def _mostra_che_lavora():
         GIRA = ('|', '/', '-', '\\')
 
         def _popola(self, _orig=originale):
-            # l'orologio parte insieme al lavoro e si spegne da solo quando la
-            # scritta non parla piu' di brani mandati
             partito = [_tm.time()]
 
             def _batti(n=0):
@@ -210,7 +177,12 @@ def _mostra_che_lavora():
                     testo = self.lbl_catalogo.cget('text') or ''
                 except Exception:
                     return
-                if 'Mando' in testo or 'Mandati' in testo:
+                if n > 4 and testo.startswith(('Fatto', 'Fermato',
+                                               'Non ha funzionato',
+                                               'Nessun brano')):
+                    return
+                if (('Mando' in testo or 'Mandati' in testo)
+                        and not getattr(self, '_orologio043', False)):
                     try:
                         self.lbl_catalogo.config(
                             text='%s %s — %d s' % (
@@ -218,10 +190,10 @@ def _mostra_che_lavora():
                                 _tm.time() - partito[0]))
                     except Exception:
                         pass
-                    try:
-                        self.window.after(500, _batti, n + 1)
-                    except Exception:
-                        pass
+                try:
+                    self.window.after(500, _batti, n + 1)
+                except Exception:
+                    pass
             try:
                 self.window.after(1500, _batti)
             except Exception:
