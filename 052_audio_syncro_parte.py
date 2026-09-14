@@ -50,8 +50,34 @@ def _load_audio_file(self, fp):
         st.messagebox.showerror(st._("Errore"), "%s" % e, parent=self.window)
 
 
+def _riconcilia_testo(self):
+    import re as _re
+    vis = self._strip_syllabic_dashes(self.text_editor.get('1.0', 'end-1c')).strip()
+    if not vis:
+        return
+    _n = lambda s: _re.sub(r'\s+', ' ', s or '').strip()
+    plain_units = self._strip_syllabic_dashes(self._units_to_plain_text()) if self.units else ''
+    if _n(vis) != _n(plain_units):
+        self.text_editor.config(state='normal')
+        self.units = st._parse_syllables(vis)
+        self.current_unit = 0
+
+
+def _fai_start_sync(_orig):
+    def _start_sync(self):
+        try:
+            _riconcilia_testo(self)
+        except Exception:
+            pass
+        return _orig(self)
+    _start_sync._p052 = True
+    return _start_sync
+
+
 try:
     st.SyncroText._init_vlc = _init_vlc
     st.SyncroText._load_audio_file = _load_audio_file
+    if not getattr(st.SyncroText._start_sync, '_p052', False):
+        st.SyncroText._start_sync = _fai_start_sync(st.SyncroText._start_sync)
 except Exception:
     pass
