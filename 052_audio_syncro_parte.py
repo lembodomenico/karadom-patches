@@ -171,6 +171,36 @@ def _fai_start_sync(_orig):
     return _start_sync
 
 
+def _mark_timestamp(self):
+    if not self.is_syncing or self.current_unit >= len(self.units):
+        return
+    if hasattr(self, '_sync_perf_start'):
+        ct = int(self._sync_vlc_base + (st.time.perf_counter() - self._sync_perf_start) * 1000)
+    else:
+        ct = self.vlc_player.get_time()
+    if ct < 0:
+        ct = 0
+    if self.current_unit > 0:
+        pt = self.units[self.current_unit - 1]['timestamp']
+        if pt is not None and ct <= pt:
+            ct = pt + 1
+    self.units[self.current_unit]['timestamp'] = ct
+    self.current_unit += 1
+    self._sync_resync_counter = getattr(self, '_sync_resync_counter', 0) + 1
+    if self._sync_resync_counter >= 20:
+        self._sync_resync_counter = 0
+        vt = self.vlc_player.get_time()
+        if vt > 0:
+            self._sync_vlc_base = vt
+            self._sync_perf_start = st.time.perf_counter()
+    if self.current_unit >= len(self.units):
+        self._finish_sync()
+        return
+    self._refresh_syllable_colors()
+    self._update_detail_panel()
+    self._update_counter()
+
+
 def _create_ui(self):
     tk = st.tk
     ttk = st.ttk
@@ -334,6 +364,7 @@ try:
     st.SyncroText._init_vlc = _init_vlc
     st.SyncroText._load_audio_file = _load_audio_file
     st.SyncroText._create_ui = _create_ui
+    st.SyncroText._mark_timestamp = _mark_timestamp
     if not getattr(st.SyncroText._start_sync, '_p052', False):
         st.SyncroText._start_sync = _fai_start_sync(st.SyncroText._start_sync)
 except Exception:
