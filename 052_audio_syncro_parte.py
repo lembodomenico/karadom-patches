@@ -158,7 +158,15 @@ def _fai_start_sync(_orig):
             _riconcilia_testo(self)
         except Exception:
             pass
-        return _orig(self)
+        r = _orig(self)
+        try:
+            if self.is_syncing:
+                self.window.bind('<Return>', lambda e: (self._mark_timestamp(), 'break')[1])
+                self.window.bind('<BackSpace>', lambda e: (self._undo_last(), 'break')[1])
+                self.window.bind('<Escape>', lambda e: (self._stop_sync(), 'break')[1])
+        except Exception:
+            pass
+        return r
     _start_sync._p052 = True
     return _start_sync
 
