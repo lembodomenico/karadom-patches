@@ -34,6 +34,7 @@
     "048_registrazione_e_info.py",
     "049_registrazione_formato.py",
     "050_expander_non_blocca.py",
-    "052_audio_syncro_parte.py"
+    "052_audio_syncro_parte.py",
+    "053_catalogo_non_frena_i_video.py"
   ]
 }
