@@ -41,6 +41,7 @@
     "056_adb_noop_skv.py",
     "057_midi_righe_lunghe.py",
     "058_righe_corte_niente_font_piccolo.py",
-    "059_va_a_capo_sempre.py"
+    "059_va_a_capo_sempre.py",
+    "061_spia_freeze.py"
   ]
 }
