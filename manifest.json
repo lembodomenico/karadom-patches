@@ -39,6 +39,7 @@
     "054_riquadro_info_pulito.py",
     "055_midi_lyric_senza_acapo.py",
     "056_adb_noop_skv.py",
-    "057_midi_righe_lunghe.py"
+    "057_midi_righe_lunghe.py",
+    "058_righe_corte_niente_font_piccolo.py"
   ]
 }
