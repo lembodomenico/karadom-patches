@@ -37,6 +37,7 @@
     "052_audio_syncro_parte.py",
     "053_catalogo_non_frena_i_video.py",
     "054_riquadro_info_pulito.py",
-    "055_midi_lyric_senza_acapo.py"
+    "055_midi_lyric_senza_acapo.py",
+    "056_adb_noop_skv.py"
   ]
 }
