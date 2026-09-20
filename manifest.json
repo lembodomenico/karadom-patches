@@ -36,6 +36,7 @@
     "050_expander_non_blocca.py",
     "052_audio_syncro_parte.py",
     "053_catalogo_non_frena_i_video.py",
-    "054_riquadro_info_pulito.py"
+    "054_riquadro_info_pulito.py",
+    "055_midi_lyric_senza_acapo.py"
   ]
 }
