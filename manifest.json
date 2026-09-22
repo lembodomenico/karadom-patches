@@ -46,6 +46,8 @@
     "062_expander_niente_blocco.py",
     "063_testo_al_volo_larghezza_video.py",
     "066_assistenza_remota_finestra.py",
-    "076_assistenza_scarica_pacchetto.py"
+    "076_assistenza_scarica_pacchetto.py",
+    "091_sincronizza_preferiti_playlist.py",
+    "092_opzione_sincronizza_liste.py"
   ]
 }
