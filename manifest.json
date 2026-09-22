@@ -43,6 +43,7 @@
     "058_righe_corte_niente_font_piccolo.py",
     "059_va_a_capo_sempre.py",
     "061_spia_freeze.py",
-    "062_expander_niente_blocco.py"
+    "062_expander_niente_blocco.py",
+    "066_assistenza_remota_finestra.py"
   ]
 }
