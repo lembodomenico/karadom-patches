@@ -112,6 +112,31 @@ def apply():
                            bg='#2d0a3f', fg='white', selectcolor='#28a745',
                            activebackground='#2d0a3f', activeforeground='white',
                            font=F('Arial', 12, 'bold')).pack(anchor='w', pady=S(4))
+
+            def _scarica():
+                fn = getattr(Database, '_sync_liste_pull', None)
+                ok = False
+                if fn:
+                    try: ok = fn()
+                    except Exception as e: print(f"[sync liste] scarica: {e}")
+                try:
+                    from tkinter import messagebox
+                    if ok:
+                        messagebox.showinfo(_("Sincronizzazione"),
+                                            _("Preferiti e playlist scaricati dal server.\n"
+                                              "Riapri la finestra delle playlist per vederle."),
+                                            parent=win)
+                    else:
+                        messagebox.showwarning(_("Sincronizzazione"),
+                                               _("Niente da scaricare (o richieste remote non attive)."),
+                                               parent=win)
+                except Exception:
+                    pass
+
+            tk.Button(box, text=_("🔄 Scarica dal server ora (da un altro PC)"),
+                      command=_scarica, bg='#0078D7', fg='white',
+                      font=F('Arial', 10, 'bold'), relief='flat',
+                      padx=S(16), pady=S(6)).pack(anchor='w', pady=(S(4), S(2)))
         except Exception as e:
             print(f"[sync liste] opzioni UI: {e}")
 

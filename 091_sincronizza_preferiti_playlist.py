@@ -22,7 +22,7 @@ def apply():
 
     URL_DEFAULT = "https://iocanto.karadom.it/api/sync_api.php"
     _lock = threading.Lock()
-    _state = {'timer': None}
+    _st = {'timer': None, 'applica': False}
 
     def _url():
         try:
@@ -30,6 +30,12 @@ def apply():
         except Exception:
             u = ''
         return u or URL_DEFAULT
+
+    def _attiva():
+        try:
+            return str(Database.get_config('sync_liste_attiva', '1')) != '0'
+        except Exception:
+            return True
 
     def _cred():
         try:
@@ -63,11 +69,8 @@ def apply():
         return liste
 
     def _invia():
-        try:
-            if str(Database.get_config('sync_liste_attiva', '1')) == '0':
-                return
-        except Exception:
-            pass
+        if not _attiva():
+            return
         nome, cognome, serial, key = _cred()
         if not (nome and cognome and serial and key):
             return
@@ -89,15 +92,74 @@ def apply():
             print(f"[sync liste] rete: {e}")
 
     def sincronizza(subito=False):
+        if _st['applica']:
+            return
         with _lock:
-            t = _state.get('timer')
+            t = _st.get('timer')
             if t is not None:
                 try: t.cancel()
                 except Exception: pass
             nt = threading.Timer(0.5 if subito else 3.0, _invia)
             nt.daemon = True
-            _state['timer'] = nt
+            _st['timer'] = nt
             nt.start()
+
+    def _applica(pref_json, pl_json):
+        _st['applica'] = True
+        try:
+            if pref_json:
+                try:
+                    pref = json.loads(pref_json)
+                    if isinstance(pref, list):
+                        Database.save_preferiti(pref)
+                except Exception as e:
+                    print(f"[sync liste] applica pref: {e}")
+            if pl_json:
+                try:
+                    pls = json.loads(pl_json)
+                    if isinstance(pls, list):
+                        nomi = set()
+                        for pl in pls:
+                            nome = (pl.get('nome') or '').strip()
+                            if not nome:
+                                continue
+                            nomi.add(nome)
+                            Database.save_playlist_standalone(nome, pl.get('brani') or [])
+                        for loc in (Database.get_playlist_standalone_list() or []):
+                            if (loc.get('nome') or '') not in nomi:
+                                try: Database.delete_playlist_standalone(loc.get('id'))
+                                except Exception: pass
+                except Exception as e:
+                    print(f"[sync liste] applica pl: {e}")
+        finally:
+            _st['applica'] = False
+
+    def scarica(*a, **k):
+        if not _attiva():
+            return False
+        nome, cognome, serial, key = _cred()
+        if not (nome and cognome and serial and key):
+            return False
+        payload = {'nome': nome, 'cognome': cognome, 'serial': serial,
+                   'license_key': key, 'action': 'sync_pull'}
+        req = urllib.request.Request(_url(),
+                                     data=json.dumps(payload).encode('utf-8'),
+                                     headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                r = json.loads(resp.read().decode('utf-8', 'replace'))
+        except Exception as e:
+            print(f"[sync liste] pull rete: {e}")
+            return False
+        if not r.get('ok'):
+            if r.get('error') != 'not_enabled':
+                print(f"[sync liste] pull server: {r.get('error')}")
+            return False
+        if not r.get('preferiti') and not r.get('playlist'):
+            return False
+        _applica(r.get('preferiti'), r.get('playlist'))
+        print("[sync liste] scaricate dal VPS e applicate in locale")
+        return True
 
     def _wrap(nome):
         orig = getattr(Database, nome, None)
@@ -121,8 +183,16 @@ def apply():
             pass
 
     Database._syncliste091 = True
-    Database._sync_liste_push = sincronizza   # per il toggle in Opzioni (patch 092)
-    sincronizza(subito=True)
+    Database._sync_liste_push = sincronizza
+    Database._sync_liste_pull = scarica   # per il pulsante "Scarica ora" (patch 092)
+
+    # All'avvio SCARICA dal VPS (l'altro PC prende le modifiche), poi i cambi risalgono
+    def _startup():
+        try: scarica()
+        except Exception as e: print(f"[sync liste] avvio: {e}")
+    t0 = threading.Timer(1.5, _startup)
+    t0.daemon = True
+    t0.start()
     return True
 
 
