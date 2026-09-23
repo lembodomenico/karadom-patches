@@ -73,22 +73,34 @@ def _avvia_loopmidi():
         return False
 
 
+import threading as _threading
+_LANCIA_LOCK = _threading.Lock()
+
+
 def _avvia_expander(port_name):
     import os, subprocess
     exe = _percorso_exe()
     if not os.path.exists(exe):
         print('[EXP] expander software non installato:', exe)
         return False
-    if _in_esecuzione('KaraDom Expander.exe'):
-        return True
-    try:
-        subprocess.Popen([exe, '--hidden', '--port', port_name or 'loopMIDI'],
-                         creationflags=0x08000000 | 0x00000008, close_fds=True)
-        print('[EXP] expander software avviato in background su', port_name or 'loopMIDI')
-        return True
-    except Exception as e:
-        print('[EXP] avvio expander software fallito:', e)
-        return False
+    # ⛔ MAI due volte: la 099 chiama _avvia_expander sia all'avvio sia alla prima
+    #    riproduzione; con tasklist lento c'era una corsa -> due istanze. Lucchetto
+    #    + flag di sessione chiudono la finestra di corsa.
+    with _LANCIA_LOCK:
+        if globals().get('_exp_lanciato_099'):
+            return True
+        if _in_esecuzione('KaraDom Expander.exe'):
+            globals()['_exp_lanciato_099'] = True
+            return True
+        try:
+            subprocess.Popen([exe, '--hidden', '--port', port_name or 'loopMIDI'],
+                             creationflags=0x08000000 | 0x00000008, close_fds=True)
+            globals()['_exp_lanciato_099'] = True
+            print('[EXP] expander software avviato in background su', port_name or 'loopMIDI')
+            return True
+        except Exception as e:
+            print('[EXP] avvio expander software fallito:', e)
+            return False
 
 
 def _assicura_banco():
