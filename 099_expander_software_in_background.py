@@ -15,9 +15,12 @@ def _percorso_exe():
 
 def _percorso_loopmidi():
     import os
-    for p in (r'C:\Program Files\KaraDom\soundfonts\loopMIDI.exe',
-              os.path.join(os.environ.get('PROGRAMFILES', r'C:\Program Files'), 'KaraDom', 'soundfonts', 'loopMIDI.exe'),
-              os.path.join(os.environ.get('PROGRAMFILES', r'C:\Program Files'), 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')):
+    exp = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'KaraDom', 'dipendenze', 'Expander', 'loopMIDI.exe')
+    pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
+    for p in (exp,   # loopMIDI portatile dentro la cartella Expander (niente admin)
+              r'C:\Program Files\KaraDom\soundfonts\loopMIDI.exe',
+              os.path.join(pf, 'KaraDom', 'soundfonts', 'loopMIDI.exe'),
+              os.path.join(pf, 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')):
         if os.path.exists(p):
             return p
     return ''
