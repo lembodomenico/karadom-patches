@@ -5,15 +5,13 @@ EXE = 'KaraDom Expander.exe'
 
 
 def _abilitato():
-    # NON scarica 80 MB su tutti: solo dove il gestore ha acceso l'expander software.
-    # Si accende con: Database.set_config('expander_software', '1') sul PC voluto.
+    # Scarica su TUTTI i client (l'expander software deve arrivare ai clienti).
+    # Unico interruttore: patch_103=0 lo spegne su un PC specifico.
     try:
         from moduli.database import Database
-        if str(Database.get_config('patch_103', '1')) == '0':
-            return False
-        return str(Database.get_config('expander_software', '0')) == '1'
+        return str(Database.get_config('patch_103', '1')) != '0'
     except Exception:
-        return False
+        return True
 
 
 def _destdir():
