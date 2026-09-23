@@ -81,34 +81,39 @@ def _copia_dentro(src, dest):
                 pass
 
 
-def _driver_ok():
-    # il driver teVirtualMIDI (dentro il setup di loopMIDI) e' installato?
+def _installa_loopmidi(dest):
+    # Copia i file del driver teVirtualMIDI e loopMIDI.exe nei percorsi di sistema
+    # dove la 099 cerca loopMIDI:
+    #   dest\Tobias Erichsen  ->  C:\Program Files\Tobias Erichsen
+    #   dest\loopMIDI.exe     ->  C:\Program Files\KaraDom\soundfonts\loopMIDI.exe
+    # (scrivere in Program Files richiede admin: best-effort).
     import os
+    import shutil
+    if os.name != 'nt':
+        return
     pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
-    return (os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'teVirtualMIDI', 'teVirtualMIDI64.sys'))
-            or os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')))
-
-
-def _proponi_driver(dest):
-    # Senza il driver kernel loopMIDI non crea la porta MIDI. Il setup ufficiale
-    # (firmato) e' nel pacchetto: lo apro in modo VISIBILE (l'utente vede la
-    # finestra e conferma l'UAC), una volta sola (marcatore .driver_lanciato).
-    # NIENTE installazione silenziosa/elevata di nascosto.
-    import os
-    if os.name != 'nt' or _driver_ok():
-        return
-    setup = os.path.join(dest, 'loopMIDISetup.exe')
-    if not os.path.isfile(setup):
-        return
-    marker = os.path.join(dest, '.driver_lanciato')
-    if os.path.isfile(marker):
-        return  # gia' proposto: non riaprirlo a ogni avvio
+    src_te = os.path.join(dest, 'Tobias Erichsen')
+    dst_te = os.path.join(pf, 'Tobias Erichsen')
     try:
-        os.startfile(setup)   # apre il wizard ufficiale; l'UAC lo gestisce Windows
-        open(marker, 'w').write('1')
-        print('[EXP] aperto il setup del driver loopMIDI (serve per la porta MIDI)')
+        if os.path.isdir(src_te):
+            for r, dirs, files in os.walk(src_te):
+                rel = os.path.relpath(r, src_te)
+                out = dst_te if rel == '.' else os.path.join(dst_te, rel)
+                os.makedirs(out, exist_ok=True)
+                for f in files:
+                    shutil.copy2(os.path.join(r, f), os.path.join(out, f))
+            print('[EXP] Tobias Erichsen copiato in', dst_te)
     except Exception as e:
-        print('[EXP] apertura setup driver:', e)
+        print('[EXP] copia Tobias Erichsen:', e)
+    src_loop = os.path.join(dest, 'loopMIDI.exe')
+    dst_loop = os.path.join(pf, 'KaraDom', 'soundfonts', 'loopMIDI.exe')
+    try:
+        if os.path.isfile(src_loop):
+            os.makedirs(os.path.dirname(dst_loop), exist_ok=True)
+            shutil.copy2(src_loop, dst_loop)
+            print('[EXP] loopMIDI.exe copiato in', dst_loop)
+    except Exception as e:
+        print('[EXP] copia loopMIDI.exe:', e)
 
 
 def _aggiorna():
@@ -152,7 +157,7 @@ def _aggiorna():
         _copia_dentro(src, dest)
         open(verfile, 'w', encoding='utf-8').write(remoto)
         print('[EXP] expander software installato/aggiornato (v%s)' % remoto)
-        _proponi_driver(dest)   # se manca il driver MIDI, apre il setup ufficiale
+        _installa_loopmidi(dest)   # copia driver teVirtualMIDI + loopMIDI.exe nei percorsi di sistema
     except Exception as e:
         print('[EXP] installo expander:', e)
     finally:
