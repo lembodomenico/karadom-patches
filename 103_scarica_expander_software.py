@@ -1,4 +1,4 @@
-# 103 - scarica l'expander software (exe + banco) dal server, dove abilitato
+# 103 - scarica l'expander software (exe + banco) dal server
 URL_ZIP = 'https://iocanto.karadom.it/dl/Expander.zip'
 URL_VER = 'https://iocanto.karadom.it/dl/Expander.ver'
 EXE = 'KaraDom Expander.exe'
@@ -40,7 +40,6 @@ def _remota(url):
 
 
 def _in_uso():
-    # se l'expander e' aperto l'exe e' bloccato: si rimanda al prossimo avvio
     import os
     import subprocess
     if os.name != 'nt':
@@ -56,7 +55,6 @@ def _in_uso():
 
 
 def _trova_root(top):
-    # cartella (dentro l'estratto) che contiene davvero l'exe
     import os
     for r, _d, files in os.walk(top):
         if EXE.lower() in [f.lower() for f in files]:
@@ -65,8 +63,6 @@ def _trova_root(top):
 
 
 def _copia_dentro(src, dest):
-    # copia i file dell'estratto DENTRO la cartella Expander SENZA cancellarla:
-    # cosi' NON tocca overlay.sf2 / expander.cfg / 099_spia.txt gia' presenti.
     import os
     import shutil
     os.makedirs(dest, exist_ok=True)
@@ -81,39 +77,34 @@ def _copia_dentro(src, dest):
                 pass
 
 
-def _installa_loopmidi(dest):
-    # Copia i file del driver teVirtualMIDI e loopMIDI.exe nei percorsi di sistema
-    # dove la 099 cerca loopMIDI:
-    #   dest\Tobias Erichsen  ->  C:\Program Files\Tobias Erichsen
-    #   dest\loopMIDI.exe     ->  C:\Program Files\KaraDom\soundfonts\loopMIDI.exe
-    # (scrivere in Program Files richiede admin: best-effort).
+def _loopmidi_installato():
     import os
-    import shutil
-    if os.name != 'nt':
-        return
     pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
-    src_te = os.path.join(dest, 'Tobias Erichsen')
-    dst_te = os.path.join(pf, 'Tobias Erichsen')
+    return (os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'teVirtualMIDI', 'teVirtualMIDI64.sys'))
+            or os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')))
+
+
+def _installa_loopmidi(dest):
+    import os, subprocess
+    if os.name != 'nt' or _loopmidi_installato():
+        return
+    setup = os.path.join(dest, 'loopMIDISetup.exe')
+    if not os.path.isfile(setup):
+        return
+    marker = os.path.join(dest, '.loopmidi_installato')
+    if os.path.isfile(marker):
+        return
+    nowin = 0x08000000
+    task = 'KaraDom_loopMIDI_install'
+    cmd_tr = '"%s" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART' % setup
     try:
-        if os.path.isdir(src_te):
-            for r, dirs, files in os.walk(src_te):
-                rel = os.path.relpath(r, src_te)
-                out = dst_te if rel == '.' else os.path.join(dst_te, rel)
-                os.makedirs(out, exist_ok=True)
-                for f in files:
-                    shutil.copy2(os.path.join(r, f), os.path.join(out, f))
-            print('[EXP] Tobias Erichsen copiato in', dst_te)
+        subprocess.run(['schtasks','/create','/tn',task,'/tr',cmd_tr,'/sc','once','/st','00:00','/rl','highest','/f'], capture_output=True, timeout=15, creationflags=nowin)
+        subprocess.run(['schtasks','/run','/tn',task], capture_output=True, timeout=15, creationflags=nowin)
+        subprocess.run(['schtasks','/delete','/tn',task,'/f'], capture_output=True, timeout=15, creationflags=nowin)
+        open(marker,'w').write('1')
+        print('[EXP] loopMIDI: installazione avviata (silenziosa)')
     except Exception as e:
-        print('[EXP] copia Tobias Erichsen:', e)
-    src_loop = os.path.join(dest, 'loopMIDI.exe')
-    dst_loop = os.path.join(pf, 'KaraDom', 'soundfonts', 'loopMIDI.exe')
-    try:
-        if os.path.isfile(src_loop):
-            os.makedirs(os.path.dirname(dst_loop), exist_ok=True)
-            shutil.copy2(src_loop, dst_loop)
-            print('[EXP] loopMIDI.exe copiato in', dst_loop)
-    except Exception as e:
-        print('[EXP] copia loopMIDI.exe:', e)
+        print('[EXP] installo loopMIDI:', e)
 
 
 def _aggiorna():
@@ -129,12 +120,11 @@ def _aggiorna():
 
     remoto = _remota(URL_VER)
     if not remoto:
-        return  # server non raggiungibile: non blocco nulla
+        return
     if exe_ok and _leggi_ver(verfile) == remoto:
-        return  # gia' aggiornato
-
+        return
     if exe_ok and _in_uso():
-        return  # aggiornamento rimandato: file in uso (riprovo al prossimo avvio)
+        return
 
     tmpzip = os.path.join(tempfile.gettempdir(), 'Expander_dl.zip')
     tmpdir = os.path.join(tempfile.gettempdir(), 'Expander_dl')
@@ -157,7 +147,7 @@ def _aggiorna():
         _copia_dentro(src, dest)
         open(verfile, 'w', encoding='utf-8').write(remoto)
         print('[EXP] expander software installato/aggiornato (v%s)' % remoto)
-        _installa_loopmidi(dest)   # copia driver teVirtualMIDI + loopMIDI.exe nei percorsi di sistema
+        _installa_loopmidi(dest)
     except Exception as e:
         print('[EXP] installo expander:', e)
     finally:
