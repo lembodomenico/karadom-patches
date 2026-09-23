@@ -83,6 +83,36 @@ def _copia_dentro(src, dest):
                 pass
 
 
+def _driver_ok():
+    # il driver teVirtualMIDI (dentro il setup di loopMIDI) e' installato?
+    import os
+    pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
+    return (os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'teVirtualMIDI', 'teVirtualMIDI64.sys'))
+            or os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')))
+
+
+def _proponi_driver(dest):
+    # Senza il driver kernel loopMIDI non crea la porta MIDI. Il setup ufficiale
+    # (firmato) e' nel pacchetto: lo apro in modo VISIBILE (l'utente vede la
+    # finestra e conferma l'UAC), una volta sola (marcatore .driver_lanciato).
+    # NIENTE installazione silenziosa/elevata di nascosto.
+    import os
+    if os.name != 'nt' or _driver_ok():
+        return
+    setup = os.path.join(dest, 'loopMIDISetup.exe')
+    if not os.path.isfile(setup):
+        return
+    marker = os.path.join(dest, '.driver_lanciato')
+    if os.path.isfile(marker):
+        return  # gia' proposto: non riaprirlo a ogni avvio
+    try:
+        os.startfile(setup)   # apre il wizard ufficiale; l'UAC lo gestisce Windows
+        open(marker, 'w').write('1')
+        print('[EXP] aperto il setup del driver loopMIDI (serve per la porta MIDI)')
+    except Exception as e:
+        print('[EXP] apertura setup driver:', e)
+
+
 def _aggiorna():
     import os
     import shutil
@@ -124,6 +154,7 @@ def _aggiorna():
         _copia_dentro(src, dest)
         open(verfile, 'w', encoding='utf-8').write(remoto)
         print('[EXP] expander software installato/aggiornato (v%s)' % remoto)
+        _proponi_driver(dest)   # se manca il driver MIDI, apre il setup ufficiale
     except Exception as e:
         print('[EXP] installo expander:', e)
     finally:
