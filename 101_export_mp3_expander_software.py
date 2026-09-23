@@ -24,9 +24,16 @@ def _base_bank():
                 return p
     except Exception:
         pass
-    for c in (os.path.join(d, 'banco.sf3'), r'C:\Users\lembo\Desktop\KARADOM\KaraDom HD.sf2'):
+    for c in (os.path.join(d, 'banco_toh.sf3'), os.path.join(d, 'banco.sf3'),
+              os.path.join(d, 'banco.sf2')):
         if os.path.exists(c):
             return c
+    import glob
+    sf3 = sorted(glob.glob(os.path.join(d, '*.sf3')))
+    if sf3:
+        return sf3[0]
+    if os.path.exists(r'C:\Users\lembo\Desktop\KARADOM\KaraDom HD.sf2'):
+        return r'C:\Users\lembo\Desktop\KARADOM\KaraDom HD.sf2'
     return ''
 
 
