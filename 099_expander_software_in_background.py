@@ -91,6 +91,43 @@ def _avvia_expander(port_name):
         return False
 
 
+def _assicura_banco():
+    # l'exe expander carica il banco da expander.cfg (ultimo scelto). Se il cfg e'
+    # vuoto/assente, punta a un file che non c'e', o punta al "KaraDom HD" (che e'
+    # solo un RIPIEGO), lo porto sul banco DEDICATO (banco_toh.sf3 / primo *.sf3):
+    # cosi' l'expander suona col ToH senza dover ricompilare. NON tocca una scelta
+    # deliberata di un altro banco (resta com'e').
+    import os, glob
+    base = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'KaraDom', 'dipendenze', 'Expander')
+    ded = ''
+    for c in (os.path.join(base, 'banco_toh.sf3'),
+              os.path.join(base, 'banco.sf3'),
+              os.path.join(base, 'banco.sf2')):
+        if os.path.exists(c):
+            ded = c
+            break
+    if not ded:
+        s = sorted(glob.glob(os.path.join(base, '*.sf3')))
+        if s:
+            ded = s[0]
+    if not ded:
+        return
+    cfg = os.path.join(base, 'expander.cfg')
+    attuale = ''
+    try:
+        if os.path.exists(cfg):
+            attuale = open(cfg, encoding='utf-8').read().strip()
+    except Exception:
+        attuale = ''
+    if (not attuale) or (not os.path.exists(attuale)) or ('karadom hd' in attuale.lower()):
+        try:
+            with open(cfg, 'w', encoding='utf-8') as f:
+                f.write(ded)
+            print('[EXP] banco expander impostato su', os.path.basename(ded))
+        except Exception as e:
+            print('[EXP] cfg banco:', e)
+
+
 def _e_software(nome):
     n = (nome or '').lower()
     return ('loopmidi' in n) or ('loop midi' in n)
@@ -156,6 +193,7 @@ def apply():
         print('[EXP] loopMIDI ora conta come expander in Automatico')
 
     _imposta_default_software(mod)
+    _assicura_banco()  # l'expander deve caricare il banco dedicato (ToH), non il KaraDom HD
 
     # ⭐ AL PRIMISSIMO CARICAMENTO: se l'expander software e' il predefinito,
     #    accendi SUBITO la porta virtuale (loopMIDI) e l'expander in background.
