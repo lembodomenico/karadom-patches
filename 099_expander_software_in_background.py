@@ -95,6 +95,8 @@ _LANCIA_LOCK = _threading.Lock()
 
 def _avvia_expander(port_name):
     import os, subprocess
+    if _socket_on():
+        return True   # in-process (patch 104): l'exe NON serve, non lo avvio -> niente finestre
     exe = _percorso_exe()
     if not os.path.exists(exe):
         print('[EXP] expander software non installato:', exe)
