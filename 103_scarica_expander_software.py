@@ -122,9 +122,11 @@ def _aggiorna():
     if not remoto:
         return
     if exe_ok and _leggi_ver(verfile) == remoto:
+        _installa_loopmidi(dest)   # gia' aggiornato: assicura comunque loopMIDI
         return
-    if exe_ok and _in_uso():
-        return
+    # NB: se l'exe expander e' in uso NON blocco l'aggiornamento. La copia del solo
+    # exe (bloccato) fallira' e verra' saltata, ma setup+banchi si aggiornano e
+    # loopMIDI puo' installarsi lo stesso.
 
     tmpzip = os.path.join(tempfile.gettempdir(), 'Expander_dl.zip')
     tmpdir = os.path.join(tempfile.gettempdir(), 'Expander_dl')
