@@ -85,24 +85,18 @@ def _loopmidi_installato():
 
 
 def _installa_loopmidi(dest):
-    import os, subprocess
+    # loopMIDI installa un driver -> serve una conferma UAC. Apro il setup ufficiale
+    # (firmato): si auto-eleva e installa. Niente marker: se il driver manca ci
+    # riprova al prossimo avvio; quando c'e', _loopmidi_installato() lo ferma.
+    import os
     if os.name != 'nt' or _loopmidi_installato():
         return
     setup = os.path.join(dest, 'loopMIDISetup.exe')
     if not os.path.isfile(setup):
         return
-    marker = os.path.join(dest, '.loopmidi_installato')
-    if os.path.isfile(marker):
-        return
-    nowin = 0x08000000
-    task = 'KaraDom_loopMIDI_install'
-    cmd_tr = '"%s" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART' % setup
     try:
-        subprocess.run(['schtasks','/create','/tn',task,'/tr',cmd_tr,'/sc','once','/st','00:00','/rl','highest','/f'], capture_output=True, timeout=15, creationflags=nowin)
-        subprocess.run(['schtasks','/run','/tn',task], capture_output=True, timeout=15, creationflags=nowin)
-        subprocess.run(['schtasks','/delete','/tn',task,'/f'], capture_output=True, timeout=15, creationflags=nowin)
-        open(marker,'w').write('1')
-        print('[EXP] loopMIDI: installazione avviata (silenziosa)')
+        os.startfile(setup)
+        print('[EXP] apro il setup di loopMIDI (installa il driver MIDI)')
     except Exception as e:
         print('[EXP] installo loopMIDI:', e)
 
