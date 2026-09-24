@@ -77,67 +77,6 @@ def _copia_dentro(src, dest):
                 pass
 
 
-def _loopmidi_installato():
-    import os
-    pf = os.environ.get('PROGRAMFILES', r'C:\Program Files')
-    return (os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'teVirtualMIDI', 'teVirtualMIDI64.sys'))
-            or os.path.isfile(os.path.join(pf, 'Tobias Erichsen', 'loopMIDI', 'loopMIDI.exe')))
-
-
-def _installa_loopmidi(dest):
-    # loopMIDI installa un driver: l'auto-lancio da thread in background non e'
-    # affidabile. Mostro un BOTTONE sulla UI; al CLIC dell'utente il setup parte
-    # in primo piano (l'UAC compare normale) e installa.
-    import os, sys
-    if os.name != 'nt' or _loopmidi_installato():
-        return
-    setup = os.path.join(dest, 'loopMIDISetup.exe')
-    if not os.path.isfile(setup):
-        return
-    if getattr(_installa_loopmidi, '_mostrata', False):
-        return
-    try:
-        main = sys.modules.get('__main__')
-        root = getattr(main, '_app_root', None)
-        if root is None:
-            return
-        _installa_loopmidi._mostrata = True
-
-        def _mostra():
-            try:
-                import tkinter as tk
-                w = tk.Toplevel(root)
-                w.title('KaraDom Expander')
-                try:
-                    w.attributes('-topmost', True)
-                except Exception:
-                    pass
-                tk.Label(w, justify='left', padx=20, pady=14,
-                         text="Per usare l'Expander serve il MIDI virtuale loopMIDI.\n"
-                              "Installalo ora: un 'Si' all'avviso di Windows, poi Avanti/Installa.").pack()
-
-                def _go():
-                    try:
-                        os.startfile(setup)
-                        print('[EXP] loopMIDI: setup avviato dal bottone')
-                    except Exception as e:
-                        print('[EXP] installo loopMIDI:', e)
-                    try:
-                        w.destroy()
-                    except Exception:
-                        pass
-
-                tk.Button(w, text='Installa loopMIDI', command=_go, bg='#0d6efd',
-                          fg='white', relief='flat', padx=16, pady=6,
-                          cursor='hand2').pack(pady=(0, 14))
-            except Exception as e:
-                print('[EXP] dialog loopMIDI:', e)
-
-        root.after(0, _mostra)
-    except Exception as e:
-        print('[EXP] installo loopMIDI:', e)
-
-
 def _aggiorna():
     import os
     import shutil
@@ -153,11 +92,9 @@ def _aggiorna():
     if not remoto:
         return
     if exe_ok and _leggi_ver(verfile) == remoto:
-        _installa_loopmidi(dest)   # gia' aggiornato: assicura comunque loopMIDI
         return
-    # NB: se l'exe expander e' in uso NON blocco l'aggiornamento. La copia del solo
-    # exe (bloccato) fallira' e verra' saltata, ma setup+banchi si aggiornano e
-    # loopMIDI puo' installarsi lo stesso.
+    # NB: se l'exe expander e' in uso NON blocco l'aggiornamento: la copia del solo
+    # exe (bloccato) fallira' e verra' saltata, i banchi si aggiornano lo stesso.
 
     tmpzip = os.path.join(tempfile.gettempdir(), 'Expander_dl.zip')
     tmpdir = os.path.join(tempfile.gettempdir(), 'Expander_dl')
@@ -180,7 +117,6 @@ def _aggiorna():
         _copia_dentro(src, dest)
         open(verfile, 'w', encoding='utf-8').write(remoto)
         print('[EXP] expander software installato/aggiornato (v%s)' % remoto)
-        _installa_loopmidi(dest)
     except Exception as e:
         print('[EXP] installo expander:', e)
     finally:

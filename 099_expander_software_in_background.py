@@ -7,6 +7,15 @@ def _spenta():
         return False
 
 
+def _socket_on():
+    # col socket (patch 104) loopMIDI NON serve: niente avvio loopMIDI ne' porta.
+    try:
+        from moduli.database import Database
+        return str(Database.get_config('expander_socket', '0')) == '1'
+    except Exception:
+        return False
+
+
 def _percorso_exe():
     import os
     base = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'KaraDom', 'dipendenze', 'Expander')
@@ -37,6 +46,8 @@ def _in_esecuzione(nome_exe):
 
 
 def _assicura_porta_registro():
+    if _socket_on():
+        return
     # loopMIDI crea le porte dall'elenco nel registro. Se non c'e' "loopMIDI Port"
     # la aggiungo: cosi' all'avvio loopMIDI crea la porta da sola (verificato).
     try:
@@ -60,6 +71,8 @@ def _assicura_porta_registro():
 
 def _avvia_loopmidi():
     import os, subprocess
+    if _socket_on():
+        return True   # col socket loopMIDI non serve: non lo avvio
     exe = _percorso_loopmidi()
     if not exe:
         print('[EXP] loopMIDI.exe non trovato')

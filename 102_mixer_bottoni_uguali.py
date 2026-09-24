@@ -60,8 +60,8 @@ def apply():
                 lbl = getattr(self, 'sf_label', None)
                 if lbl is not None:
                     t = lbl.cget('text') or ''
-                    if 'loop' in t.lower():
-                        lbl.config(text="KaraDom Expander", fg='#c77dff')
+                    if 'loop' in t.lower() or 'expander software' in t.lower():
+                        lbl.config(text="Expander Software", fg='#c77dff')
             except Exception:
                 pass
             return r

@@ -59,6 +59,7 @@
     "100_comandi_expander_dal_mixer.py",
     "101_export_mp3_expander_software.py",
     "102_mixer_bottoni_uguali.py",
-    "103_scarica_expander_software.py"
+    "103_scarica_expander_software.py",
+    "104_expander_via_socket.py"
   ]
 }
