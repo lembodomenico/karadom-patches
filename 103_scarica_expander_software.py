@@ -85,18 +85,55 @@ def _loopmidi_installato():
 
 
 def _installa_loopmidi(dest):
-    # loopMIDI installa un driver -> serve una conferma UAC. Apro il setup ufficiale
-    # (firmato): si auto-eleva e installa. Niente marker: se il driver manca ci
-    # riprova al prossimo avvio; quando c'e', _loopmidi_installato() lo ferma.
-    import os
+    # loopMIDI installa un driver: l'auto-lancio da thread in background non e'
+    # affidabile. Mostro un BOTTONE sulla UI; al CLIC dell'utente il setup parte
+    # in primo piano (l'UAC compare normale) e installa.
+    import os, sys
     if os.name != 'nt' or _loopmidi_installato():
         return
     setup = os.path.join(dest, 'loopMIDISetup.exe')
     if not os.path.isfile(setup):
         return
+    if getattr(_installa_loopmidi, '_mostrata', False):
+        return
     try:
-        os.startfile(setup)
-        print('[EXP] apro il setup di loopMIDI (installa il driver MIDI)')
+        main = sys.modules.get('__main__')
+        root = getattr(main, '_app_root', None)
+        if root is None:
+            return
+        _installa_loopmidi._mostrata = True
+
+        def _mostra():
+            try:
+                import tkinter as tk
+                w = tk.Toplevel(root)
+                w.title('KaraDom Expander')
+                try:
+                    w.attributes('-topmost', True)
+                except Exception:
+                    pass
+                tk.Label(w, justify='left', padx=20, pady=14,
+                         text="Per usare l'Expander serve il MIDI virtuale loopMIDI.\n"
+                              "Installalo ora: un 'Si' all'avviso di Windows, poi Avanti/Installa.").pack()
+
+                def _go():
+                    try:
+                        os.startfile(setup)
+                        print('[EXP] loopMIDI: setup avviato dal bottone')
+                    except Exception as e:
+                        print('[EXP] installo loopMIDI:', e)
+                    try:
+                        w.destroy()
+                    except Exception:
+                        pass
+
+                tk.Button(w, text='Installa loopMIDI', command=_go, bg='#0d6efd',
+                          fg='white', relief='flat', padx=16, pady=6,
+                          cursor='hand2').pack(pady=(0, 14))
+            except Exception as e:
+                print('[EXP] dialog loopMIDI:', e)
+
+        root.after(0, _mostra)
     except Exception as e:
         print('[EXP] installo loopMIDI:', e)
 
