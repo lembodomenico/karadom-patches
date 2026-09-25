@@ -68,6 +68,7 @@
     "111_scaletta_sync_percorso.py",
     "112_richieste_remote_percorso.py",
     "114_youtube_download_fix.py",
-    "115_expander_fisico_rilevato.py"
+    "115_expander_fisico_rilevato.py",
+    "116_expander_ok_chiude.py"
   ]
 }
