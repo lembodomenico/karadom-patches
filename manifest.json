@@ -69,6 +69,7 @@
     "112_richieste_remote_percorso.py",
     "114_youtube_download_fix.py",
     "115_expander_fisico_rilevato.py",
-    "116_expander_ok_chiude.py"
+    "116_expander_ok_chiude.py",
+    "118_riscarica_patch_da_pannello.py"
   ]
 }
