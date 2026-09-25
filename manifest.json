@@ -66,6 +66,7 @@
     "109_expander_software_filebased.py",
     "110_toh_banco_expander.py",
     "111_scaletta_sync_percorso.py",
-    "112_richieste_remote_percorso.py"
+    "112_richieste_remote_percorso.py",
+    "114_youtube_download_fix.py"
   ]
 }
