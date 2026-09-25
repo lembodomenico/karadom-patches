@@ -82,6 +82,7 @@ def _applica_fx(eng):
     vol = _int(_cfg('exp_sw_vol', '100'), 100)
     bri = _int(_cfg('exp_sw_bright', '50'), 50)
     rev = _int(_cfg('exp_sw_reverb', '20'), 20)
+    bas = _int(_cfg('exp_sw_bass', '75'), 75)   # 50 = neutro, 75 = +6 dB sui gravi
     # --- volume (attributo dello stream) ---
     try:
         b.BASS_ChannelSetAttribute.argtypes = [DWORD, DWORD, ctypes.c_float]
@@ -104,6 +105,17 @@ def _applica_fx(eng):
         if hf:
             g = (max(0, min(100, bri)) - 50) / 50.0 * 12.0   # -12..+12 dB
             b.BASS_FXSetParameters(hf, ctypes.byref(DX8_PARAMEQ(7000.0, 18.0, g)))
+    except Exception:
+        pass
+    # --- bassi = EQ gravi (shelf a 100 Hz), 50 = neutro ---
+    try:
+        hb = getattr(eng, '_fx_bass_109', 0)
+        if not hb:
+            hb = b.BASS_ChannelSetFX(st, BASS_FX_DX8_PARAMEQ, 3)
+            eng._fx_bass_109 = hb
+        if hb:
+            gb = (max(0, min(100, bas)) - 50) / 50.0 * 12.0   # -12..+12 dB
+            b.BASS_FXSetParameters(hb, ctypes.byref(DX8_PARAMEQ(100.0, 18.0, gb)))
     except Exception:
         pass
     # --- riverbero ---
@@ -222,7 +234,7 @@ def apply():
         mod.get_expander_player = _get_player
 
     # 2) DSP: riaggancio i cursori (106 chiama ex._exp_soft_dsp) al motore file-based.
-    def _dsp(vol=None, bright=None, reverb=None):
+    def _dsp(vol=None, bright=None, reverb=None, bass=None):
         try:
             if vol is not None:
                 mod._set_cfg('exp_sw_vol', str(_int(vol, 100)))
@@ -230,6 +242,8 @@ def apply():
                 mod._set_cfg('exp_sw_bright', str(_int(bright, 50)))
             if reverb is not None:
                 mod._set_cfg('exp_sw_reverb', str(_int(reverb, 20)))
+            if bass is not None:
+                mod._set_cfg('exp_sw_bass', str(_int(bass, 75)))
         except Exception:
             pass
         try:
@@ -252,6 +266,7 @@ def apply():
                     if r and getattr(self, '_exp_soft_active', False) and getattr(self, 'is_midi', False):
                         self._fx_eq_109 = 0   # lo stream e' nuovo: i vecchi handle non valgono
                         self._fx_rev_109 = 0
+                        self._fx_bass_109 = 0
                         _applica_fx(self)
                 except Exception as e:
                     print('[EXP109] fx post-load:', e)

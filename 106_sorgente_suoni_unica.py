@@ -145,6 +145,7 @@ def apply():
         self.var_vol = tk.IntVar(value=_int(_cfg_get('exp_sw_vol', '100'), 100))
         self.var_bri = tk.IntVar(value=_int(_cfg_get('exp_sw_bright', '50'), 50))
         self.var_rev = tk.IntVar(value=_int(_cfg_get('exp_sw_reverb', '20'), 20))
+        self.var_bass = tk.IntVar(value=_int(_cfg_get('exp_sw_bass', '75'), 75))
 
         def _slider(testo, var):
             r = tk.Frame(reg, bg=BG)
@@ -157,6 +158,7 @@ def apply():
                      font=Ff('Arial', 8)).pack(side='left', fill='x', expand=True)
 
         _slider("Volume", self.var_vol)
+        _slider("Bassi", self.var_bass)
         _slider("Brillantezza", self.var_bri)
         _slider("Riverbero", self.var_rev)
 
@@ -242,12 +244,16 @@ def apply():
 
     def _dsp(self, *a):
         v = int(self.var_vol.get()); br = int(self.var_bri.get()); rv = int(self.var_rev.get())
+        ba = int(self.var_bass.get())
         ex._set_cfg('exp_sw_vol', str(v))
         ex._set_cfg('exp_sw_bright', str(br))
         ex._set_cfg('exp_sw_reverb', str(rv))
+        ex._set_cfg('exp_sw_bass', str(ba))
         fn = getattr(ex, '_exp_soft_dsp', None)
         if fn:
             try:
+                fn(v, br, rv, ba)
+            except TypeError:
                 fn(v, br, rv)
             except Exception as e:
                 print('[SORG106] dsp:', e)
