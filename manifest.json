@@ -71,6 +71,13 @@
     "116_expander_ok_chiude.py",
     "117_mute_non_sballa.py",
     "118_riscarica_patch_da_pannello.py",
-    "127_expander_apertura_piu_tempo.py"
+    "119_mute_fluidsynth_non_sballa.py",
+    "120_mixer_uscita_dopo_unmute.py",
+    "121_mixer_bpm_in_alto.py",
+    "122_bassi_veri_lowshelf.py",
+    "123_applica_senza_salto.py",
+    "124_expander_polifonia_512.py",
+    "127_expander_apertura_piu_tempo.py",
+    "128_expander_niente_stream.py"
   ]
 }
