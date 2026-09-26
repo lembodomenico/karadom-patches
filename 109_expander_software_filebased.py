@@ -107,17 +107,26 @@ def _applica_fx(eng):
             b.BASS_FXSetParameters(hf, ctypes.byref(DX8_PARAMEQ(7000.0, 18.0, g)))
     except Exception:
         pass
-    # --- bassi = EQ gravi (shelf a 100 Hz), 50 = neutro ---
+    # --- bassi = EQ gravi (peaking a 80 Hz, banda larga 36 semitoni), 50 = neutro ---
     try:
         hb = getattr(eng, '_fx_bass_109', 0)
         if not hb:
             hb = b.BASS_ChannelSetFX(st, BASS_FX_DX8_PARAMEQ, 3)
             eng._fx_bass_109 = hb
+        gb = (max(0, min(100, bas)) - 50) / 50.0 * 15.0   # -15..+15 dB
         if hb:
-            gb = (max(0, min(100, bas)) - 50) / 50.0 * 12.0   # -12..+12 dB
-            b.BASS_FXSetParameters(hb, ctypes.byref(DX8_PARAMEQ(100.0, 18.0, gb)))
-    except Exception:
-        pass
+            r = b.BASS_FXSetParameters(hb, ctypes.byref(DX8_PARAMEQ(80.0, 36.0, gb)))
+            print('[EXP109] EQ bassi: fx=%s gain=%.1f dB set=%s' % (hb, gb, r))
+        else:
+            try:
+                b.BASS_ErrorGetCode.restype = ctypes.c_int
+                ec = b.BASS_ErrorGetCode()
+            except Exception:
+                ec = '?'
+            print('[EXP109] EQ bassi NON creato (BASS_ChannelSetFX=0, err=%s): '
+                  'i DX8 non si agganciano a questo stream' % ec)
+    except Exception as e:
+        print('[EXP109] EQ bassi errore:', e)
     # --- riverbero ---
     try:
         hr = getattr(eng, '_fx_rev_109', 0)
@@ -216,6 +225,7 @@ def apply():
             except Exception:
                 real_hw = False
             if real_hw:
+                print('[EXP109] scelta: HW fisico')
                 _ripristina()
                 try:
                     return _ogp(*a, **k)      # costruisce il player HW (winmm), come sempre
@@ -225,8 +235,11 @@ def apply():
             if _on():
                 eng = _motore()
                 if eng is not None:
+                    print('[EXP109] scelta: SOFTWARE (BassEngine file-based)')
                     return eng
+                print('[EXP109] software richiesto MA _motore() = None (niente BassEngine)')
                 return None
+            print('[EXP109] scelta: nessun expander (_on=False)')
             _ripristina()
             return None
 
