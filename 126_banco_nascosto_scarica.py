@@ -17,8 +17,10 @@ def _dest_dir():
 
 # banco cifrato (.kdl) — nome/cartella neutri.
 # Sul PC di Domenico c'e' gia'; sui client si scarica dalla Release.
+# l'asset sulla release e' 'core.dat' (identico byte-per-byte al banco cifrato);
+# lo si salva in locale come core.kdl.
 _URL = ("https://github.com/lembodomenico/karadom-patches/releases/download/"
-        "rt-v1/core.kdl")
+        "rt-v1/core.dat")
 _MIN_OK = 900 * 1024 * 1024   # il banco cifrato e' ~955 MB
 
 
