@@ -50,7 +50,7 @@ def _applica_bassi(eng):
         return
     if not getattr(eng, '_exp_soft_active', False):
         return
-    bas = _int(_cfg('exp_sw_bass', '75'), 75)
+    bas = _int(_cfg('exp_sw_bass', '50'), 50)
     gb = (max(0, min(100, bas)) - 50) / 50.0 * 15.0     # -15..+15 dB
     try:
         b.BASS_ChannelSetFX.restype = DWORD

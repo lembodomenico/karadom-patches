@@ -77,6 +77,8 @@
     "122_bassi_veri_lowshelf.py",
     "123_applica_senza_salto.py",
     "124_expander_polifonia_512.py",
+    "125_banco_cifrato_kdb.py",
+    "126_banco_nascosto_scarica.py",
     "127_expander_apertura_piu_tempo.py",
     "128_expander_niente_stream.py",
     "129_sorgente_scelta_persiste.py"
