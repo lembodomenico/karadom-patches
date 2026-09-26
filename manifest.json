@@ -70,6 +70,7 @@
     "114_youtube_download_fix.py",
     "115_expander_fisico_rilevato.py",
     "116_expander_ok_chiude.py",
+    "117_mute_non_sballa.py",
     "118_riscarica_patch_da_pannello.py"
   ]
 }
