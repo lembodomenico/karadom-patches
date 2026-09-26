@@ -44,6 +44,8 @@
     "127_expander_apertura_piu_tempo.py",
     "128_expander_niente_stream.py",
     "129_sorgente_scelta_persiste.py",
-    "130_cestino_azzera_tonalita.py"
+    "130_cestino_azzera_tonalita.py",
+    "132_scroll_suggerimenti_righe.py",
+    "133_tooltip_dentro_schermo.py"
   ]
 }

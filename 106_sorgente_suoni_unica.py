@@ -80,6 +80,58 @@ def apply():
         return [p for p in ex.list_ports()
                 if p.get('tipo') == 'expander' and p.get('punteggio', 0) > 0]
 
+    class _FaderVerde(tk.Canvas):
+        """Cursore disegnato: barra GRIGIA, SOLO il fader VERDE. Mostra il valore."""
+        def __init__(self, parent, variable, command=None, length=170):
+            tk.Canvas.__init__(self, parent, width=length, height=S(26),
+                               bg=BG, highlightthickness=0, bd=0)
+            self._var = variable; self._cmd = command
+            self._len = length; self._pad = S(9); self._tw = S(12)
+            self.bind('<Configure>', lambda e: self._draw())
+            self.bind('<Button-1>', self._set_da_x)
+            self.bind('<B1-Motion>', self._set_da_x)
+            try:
+                self._var.trace_add('write', lambda *a: self._draw())
+            except Exception:
+                try: self._var.trace('w', lambda *a: self._draw())
+                except Exception: pass
+            self._draw()
+
+        def _wpx(self):
+            w = self.winfo_width()
+            return w if w > 1 else self._len
+
+        def _ax_bx(self):
+            w = self._wpx(); a = self._pad + self._tw / 2; b = w - self._pad - self._tw / 2
+            return a, b
+
+        def _draw(self):
+            self.delete('all')
+            w = self._wpx()
+            try: h = int(self['height'])
+            except Exception: h = S(26)
+            cy = int(h * 0.62)
+            try: v = int(self._var.get())
+            except Exception: v = 0
+            v = max(0, min(100, v))
+            a, b = self._ax_bx()
+            self.create_line(a, cy, b, cy, fill='#555555', width=S(5), capstyle='round')
+            x = a + (b - a) * (v / 100.0)
+            self.create_rectangle(x - self._tw / 2, cy - S(8), x + self._tw / 2, cy + S(8),
+                                  fill='#39FF14', outline='#2bd40e')
+
+        def _set_da_x(self, e):
+            a, b = self._ax_bx()
+            if b <= a:
+                return
+            v = int(round(max(0.0, min(1.0, (e.x - a) / (b - a))) * 100))
+            if v != int(self._var.get()):
+                self._var.set(v)
+            self._draw()
+            if self._cmd:
+                try: self._cmd(v)
+                except Exception: pass
+
     def _costruisci(self):
         try:
             self.win.resizable(True, True)
@@ -102,7 +154,7 @@ def apply():
         cornice.pack(fill='x', padx=S(12), pady=S(3))
 
         riga_sf = tk.Frame(cornice, bg=BG)
-        riga_sf.pack(fill='x', padx=S(6), pady=S(1))
+        riga_sf.pack(fill='x', padx=S(6), pady=S(4))
         tk.Radiobutton(riga_sf, text="SoundFont (SF2)", value='sf2',
                        variable=self.var_sorgente, command=self._scegli_sorgente,
                        bg=BG, fg='white', selectcolor='#333333', activebackground=BG,
@@ -118,9 +170,9 @@ def apply():
                        variable=self.var_sorgente, command=self._scegli_sorgente,
                        bg=BG, fg='white', selectcolor='#333333', activebackground=BG,
                        activeforeground=VERDE, font=Ff('Arial', 9), anchor='w')
-        self.rb_fisico.pack(fill='x', padx=S(6))
+        self.rb_fisico.pack(fill='x', padx=S(6), pady=S(4))
         riga = tk.Frame(cornice, bg=BG)
-        riga.pack(fill='x', padx=S(22), pady=S(1))
+        riga.pack(fill='x', padx=S(30), pady=(0, S(4)))
         tk.Label(riga, text="Porta:", bg=BG, fg='white', font=Ff('Arial', 9)).pack(side='left')
         self.combo = ttk.Combobox(riga, textvariable=self.var_porta, state='readonly',
                                   width=30, font=Ff('Arial', 9))
@@ -128,16 +180,14 @@ def apply():
         self.combo.bind('<<ComboboxSelected>>', lambda ev: self._scegli_sorgente())
 
         riga_sw = tk.Frame(cornice, bg=BG)
-        riga_sw.pack(fill='x', padx=S(6), pady=S(1))
+        riga_sw.pack(fill='x', padx=S(6), pady=S(4))
         tk.Radiobutton(riga_sw, text="Expander Software", value='software',
                        variable=self.var_sorgente, command=self._scegli_sorgente,
                        bg=BG, fg='white', selectcolor='#333333', activebackground=BG,
                        activeforeground=VERDE, font=Ff('Arial', 9), anchor='w').pack(side='left')
-        self.lbl_banco = tk.Label(riga_sw, text=_banco_nome(), bg=BG, fg='white', font=Ff('Arial', 8))
-        self.lbl_banco.pack(side='left', padx=S(4))
-        tk.Button(riga_sw, text="📂 Banco…", command=self._scegli_banco,
-                  bg='#6f42c1', fg='white', font=Ff('Arial', 8, 'bold'), relief='flat',
-                  bd=0, cursor='hand2', padx=S(6), pady=S(1)).pack(side='right')
+        # niente nome del banco a video (core.kdl nascosto): label vuota, tenuta solo
+        # per compatibilita' con eventuali update di self.lbl_banco
+        self.lbl_banco = tk.Label(riga_sw, text='', bg=BG, fg='white', font=Ff('Arial', 8))
 
         reg = tk.LabelFrame(self.win, text=" Regolazioni Expander Software ", bg=BG,
                             fg=VERDE, font=Ff('Arial', 9, 'bold'), bd=1)
@@ -152,10 +202,20 @@ def apply():
             r.pack(fill='x', padx=S(8), pady=0)
             tk.Label(r, text=testo, bg=BG, fg='white', font=Ff('Arial', 9),
                      width=11, anchor='w').pack(side='left')
-            tk.Scale(r, from_=0, to=100, orient='horizontal', variable=var,
-                     command=self._dsp, bg=BG, fg='white', troughcolor='#333333',
-                     highlightthickness=0, sliderrelief='flat', length=S(170),
-                     font=Ff('Arial', 8)).pack(side='left', fill='x', expand=True)
+            # percentuale a destra, aggiornata mentre scorri
+            val = tk.Label(r, text=str(var.get()) + '%', bg=BG, fg='white',
+                           font=Ff('Arial', 9, 'bold'), width=5, anchor='e')
+            val.pack(side='right')
+            try:
+                var.trace_add('write', lambda *a: val.config(text=str(var.get()) + '%'))
+            except Exception:
+                try:
+                    var.trace('w', lambda *a: val.config(text=str(var.get()) + '%'))
+                except Exception:
+                    pass
+            # barra grigia, SOLO il fader verde (cursore disegnato a mano)
+            _FaderVerde(r, var, command=self._dsp, length=S(150)).pack(
+                side='left', fill='x', expand=True)
 
         _slider("Volume", self.var_vol)
         _slider("Bassi", self.var_bass)
