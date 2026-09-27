@@ -100,12 +100,43 @@ def apply():
                 self.combo.bind('<<ComboboxSelected>>', lambda ev, s=self: s._solo_scritta())
             except Exception:
                 pass
+            # ri-centro DOPO le mie modifiche (tolto "Chiudi" ecc.): se no la
+            # finestra resta col centraggio vecchio e i pulsanti finiscono sotto
+            # la barra di Windows (Applica non si vede).
+            try:
+                self.win.after(120, lambda s=self: s._ricentra116())
+            except Exception:
+                pass
+            # Invio = Applica: sicurezza se il bottone finisse comunque fuori
+            try:
+                self.win.bind('<Return>', lambda e, s=self: s._ok_chiude())
+            except Exception:
+                pass
         except Exception as e:
             print('[SORG116] post-costruzione:', e)
+
+    def _ricentra116(self):
+        # centro la finestra dentro l'AREA UTILE (schermo meno barra applicazioni),
+        # cosi' la riga dei pulsanti (Applica/Prova/Rileva) resta sempre visibile.
+        try:
+            self.win.update_idletasks()
+            w = max(self.win.winfo_reqwidth(), self.win.winfo_width())
+            h = max(self.win.winfo_reqheight(), self.win.winfo_height())
+            sw = self.win.winfo_screenwidth()
+            sh = self.win.winfo_screenheight()
+            disp = sh - 90            # barra applicazioni + bordi
+            if h > disp:
+                h = disp
+            x = max(0, (sw - w) // 2)
+            y = max(10, (disp - h) // 2)
+            self.win.geometry("%dx%d+%d+%d" % (w, h, x, y))
+        except Exception:
+            pass
 
     F._solo_scritta = _solo_scritta
     F._aggiorna_mixer = _aggiorna_mixer
     F._ok_chiude = _ok_chiude
+    F._ricentra116 = _ricentra116
     F._costruisci = _costruisci116
     F._ok_chiude_116 = True
     print('[SORG116] cambio = solo scritta; Applica/OK applica e chiude; niente Chiudi')
