@@ -1,5 +1,4 @@
 import os
-import threading
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -32,18 +31,10 @@ def _drive_montato(path):
 
 
 def _exists_timeout(path, t=2.0):
-    # os.path.exists in un worker: se il disco (esterno/rete) e' scollegato e si pianta,
-    # NON blocca oltre `t` secondi (il worker resta appeso ma noi proseguiamo).
+    # os.path.exists con tetto di tempo: un percorso di rete/disco lento non blocca
+    # oltre `t` secondi (il worker resta appeso ma noi proseguiamo).
     try:
         return bool(_POOL.submit(os.path.exists, path).result(timeout=t))
-    except Exception:
-        return False
-
-
-def _disco_esterno_timeout(path, t=2.0):
-    try:
-        from moduli.disco_lento import disco_esterno
-        return bool(_POOL.submit(disco_esterno, path).result(timeout=t))
     except Exception:
         return False
 
@@ -59,7 +50,8 @@ def apply():
             return True
 
         def _popola(self):
-            # UI (veloce): pulisci l'albero + tag colore
+            # SINCRONO sul thread grafico (Tk NON e' thread-safe: niente .after da altri
+            # thread). Il freeze si evita saltando SUBITO i dischi non montati + tetto 2s.
             try:
                 for item in self.tree.get_children():
                     self.tree.delete(item)
@@ -73,41 +65,31 @@ def apply():
                 prefs = Database.get_preferiti()
             except Exception:
                 prefs = []
-
-            def _lavoro():
-                # thread di fondo: i controlli su disco NON bloccano la UI
-                pronti = []
-                for pref in prefs:
-                    path = pref.get('path', '')
-                    if not _drive_montato(path):
-                        continue  # disco non collegato: si salta SUBITO (non si carica)
-                    if not _exists_timeout(path, 2.0):
-                        continue  # disco c'e' ma il percorso no/lento: lo salto (come prima)
-                    tags = ()
-                    mark = ""
-                    if _disco_esterno_timeout(path, 2.0):
+            for pref in prefs:
+                path = pref.get('path', '')
+                if not _drive_montato(path):
+                    continue  # disco non collegato: salta SUBITO (niente hang)
+                if not _exists_timeout(path, 2.0):
+                    continue  # disco c'e' ma percorso assente/lento: salta (come prima)
+                tags = ()
+                mark = ""
+                try:
+                    from moduli.disco_lento import disco_esterno
+                    if disco_esterno(path):
                         tags = ("disco_esterno",)
                         mark = "💾 "
-                    pronti.append((pref.get('nome', path), path, tags, mark))
-
-                def _inserisci():
-                    try:
-                        for nome, path, tags, mark in pronti:
-                            node = self.tree.insert('', 'end', text="📁 %s%s" % (mark, nome),
-                                                    values=(path,), open=False, tags=tags)
-                            self.tree.insert(node, 'end', text='...')
-                    except Exception as e:
-                        print('[PREF134] insert:', e)
+                except Exception:
+                    pass
                 try:
-                    self.tree.after(0, _inserisci)
+                    node = self.tree.insert('', 'end', text="📁 %s%s" % (mark, pref.get('nome', path)),
+                                            values=(path,), open=False, tags=tags)
+                    self.tree.insert(node, 'end', text='...')
                 except Exception:
                     pass
 
-            threading.Thread(target=_lavoro, daemon=True).start()
-
         C.popola_albero = _popola
         C._pref134 = True
-        print('[PREF134] preferiti caricati in background: avvio non si blocca sui dischi offline')
+        print('[PREF134] preferiti: dischi non montati saltati subito, tetto 2s (avvio non si blocca)')
     except Exception as e:
         print('[PREF134] hook:', e)
     return True
