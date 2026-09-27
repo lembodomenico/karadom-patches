@@ -23,8 +23,10 @@ def _exp_dir():
 
 def _banco():
     # 1) banco scelto dall'utente nella finestra Expander (config exp_banco_path)
+    #    SOLO se e' un SoundFont VERO: il .kdl e' il banco interno CIFRATO e BASS
+    #    non lo puo' caricare -> l'expander software non partirebbe. Si ripiega.
     p = _cfg('exp_banco_path', '')
-    if p and os.path.isfile(p):
+    if p and os.path.isfile(p) and os.path.splitext(p)[1].lower() in ('.sf2', '.sf3'):
         return p
     # 2) altrimenti i file nella cartella Expander
     d = _exp_dir()
