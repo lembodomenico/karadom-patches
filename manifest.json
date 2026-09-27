@@ -48,6 +48,7 @@
     "132_scroll_suggerimenti_righe.py",
     "133_tooltip_dentro_schermo.py",
     "134_preferiti_non_bloccano_avvio.py",
-    "135_suggerimenti_solo_dischi_presenti.py"
+    "135_suggerimenti_solo_dischi_presenti.py",
+    "136_preferiti_aggiorna_delta.py"
   ]
 }
