@@ -46,6 +46,7 @@
     "129_sorgente_scelta_persiste.py",
     "130_cestino_azzera_tonalita.py",
     "132_scroll_suggerimenti_righe.py",
-    "133_tooltip_dentro_schermo.py"
+    "133_tooltip_dentro_schermo.py",
+    "134_preferiti_non_bloccano_avvio.py"
   ]
 }
