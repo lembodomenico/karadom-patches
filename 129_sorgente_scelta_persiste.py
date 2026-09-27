@@ -37,10 +37,12 @@ def apply():
         def _get_player(*a, **k):
             scelta = str(_get('sorgente_scelta', '')).lower()
             if scelta == 'sf2':
-                # SF2 esplicito: niente expander, nemmeno se il fisico c'e'
+                # SF2 esplicito: niente expander, nemmeno se il fisico c'e'.
+                # Spengo il flag dell'expander software, se no il mixer continua a
+                # scrivere "Expander Software" invece del nome dell'SF2 scelto.
                 try:
-                    if hasattr(ex, 'reset_player') and not (getattr(ex, 'is_active', None) and ex.is_active()):
-                        pass
+                    from moduli.bass_engine import get_bass_engine
+                    get_bass_engine()._exp_soft_active = False
                 except Exception:
                     pass
                 return None

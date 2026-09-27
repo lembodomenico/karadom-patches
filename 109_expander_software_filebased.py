@@ -224,7 +224,10 @@ def apply():
                     real_hw = True
             except Exception:
                 real_hw = False
-            if real_hw:
+            # la scelta ESPLICITA dell'utente (finestra sorgente) vince: se ha
+            # scelto "software", il software parte ANCHE se c'e' l'HW collegato.
+            scelta = str(_cfg('sorgente_scelta', '')).lower()
+            if real_hw and scelta != 'software':
                 print('[EXP109] scelta: HW fisico')
                 _ripristina()
                 try:
@@ -232,10 +235,11 @@ def apply():
                 except Exception as e:
                     print('[EXP109] player HW:', e)
                     return None
-            if _on():
+            if scelta == 'software' or _on():
                 eng = _motore()
                 if eng is not None:
-                    print('[EXP109] scelta: SOFTWARE (BassEngine file-based)')
+                    print('[EXP109] scelta: SOFTWARE (BassEngine file-based)%s'
+                          % (' [forzato pur con HW]' if real_hw else ''))
                     return eng
                 print('[EXP109] software richiesto MA _motore() = None (niente BassEngine)')
                 return None
