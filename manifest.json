@@ -11,6 +11,7 @@
     "037_spia_parole_in_ritardo.py",
     "050_expander_non_blocca.py",
     "056_adb_noop_skv.py",
+    "057_midi_righe_lunghe.py",
     "061_spia_freeze.py",
     "062_expander_niente_blocco.py",
     "066_assistenza_remota_finestra.py",
