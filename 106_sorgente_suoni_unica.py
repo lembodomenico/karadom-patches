@@ -34,7 +34,12 @@ def _banco_nome():
 
 
 def _sorgente_attuale():
-    # 1) un expander FISICO collegato ha SEMPRE la precedenza (default su di lui)
+    # 0) la SCELTA ESPLICITA dell'utente (persistita) vince SEMPRE: puo' scegliere
+    #    quello che vuole, l'HW non lo blocca (vedi patch 129 lato motore).
+    sc = str(_cfg_get('sorgente_scelta', '')).lower()
+    if sc in ('sf2', 'software', 'fisico'):
+        return sc
+    # 1) nessuna scelta esplicita -> DEFAULT: HW se collegato...
     try:
         from moduli import expander_midi as _ex
         for p in _ex.list_ports():
@@ -42,13 +47,19 @@ def _sorgente_attuale():
                 return 'fisico'
     except Exception:
         pass
-    # 2) altrimenti il default e' l'Expander Software (socket assente = '1')
-    if str(_cfg_get('expander_socket', '1')) == '1':
-        return 'software'
-    # 3) SF2 solo se scelto esplicitamente (socket=0 + mode=off)
-    if str(_cfg_get('expander_mode', 'auto')).lower() == 'off':
-        return 'sf2'
-    return 'fisico'
+    # 2) ...altrimenti Expander Software
+    return 'software'
+
+
+def _mixer_refresh():
+    # aggiorna SUBITO la dicitura sorgente nel mixer (istanza viva)
+    try:
+        import moduli.mixer as _mx
+        p = getattr(_mx.MIDIMixerPanel, '_instance', None)
+        if p is not None and hasattr(p, '_update_soundfont_display'):
+            p._update_soundfont_display()
+    except Exception:
+        pass
 
 
 def apply():
@@ -226,7 +237,7 @@ def apply():
         #       finiscono mai fuori se la finestra si accorcia) -----
         pulsanti = tk.Frame(self.win, bg=BG)
         pulsanti.pack(side='bottom', fill='x', padx=S(12), pady=S(8))
-        tk.Button(pulsanti, text="💾 OK / Applica", command=self._salva, bg='#28a745', fg='white',
+        tk.Button(pulsanti, text="💾 OK / Applica", command=self._applica_106, bg='#28a745', fg='white',
                   font=Ff('Arial', 10, 'bold'), relief='flat', bd=0, cursor='hand2',
                   padx=S(14), pady=S(5)).pack(side='left')
         tk.Button(pulsanti, text="Chiudi", command=self.win.destroy, bg='#6c757d', fg='white',
@@ -397,8 +408,25 @@ def apply():
             except Exception:
                 pass
             self._aggiorna_stato()
+            _mixer_refresh()   # la dicitura sorgente nel mixer cambia all'istante
         except Exception as e:
             print('[SORG106] applica sorgente:', e)
+
+    def _applica_106(self):
+        """Bottone OK/Applica della finestra sorgente: applica la sorgente SCELTA
+        coi radio nuovi (non il vecchio _applica_ora, che guardava var_modo e
+        ignorava SF2/software), aggiorna il mixer e conferma."""
+        try:
+            self._scegli_sorgente()   # applica il radio corrente (129 salva la scelta)
+        except Exception as e:
+            print('[SORG106] applica_106:', e)
+        _mixer_refresh()
+        try:
+            from tkinter import messagebox
+            messagebox.showinfo("Expander MIDI",
+                                "Sorgente salvata e applicata.", parent=self.win)
+        except Exception:
+            pass
 
     F._costruisci = _costruisci
     F._aggiorna_stato = _aggiorna_stato
