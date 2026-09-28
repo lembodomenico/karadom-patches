@@ -93,6 +93,7 @@
     "142_link_azzera_tonalita.py",
     "143_esegui_da_ricerca_azzera_ton_pitch.py",
     "144_play_youtube_pitch_dalla_riga.py",
-    "145_righe_riwrap_larghezza_vera.py"
+    "145_righe_riwrap_larghezza_vera.py",
+    "148_refresh_mixer_su_applica.py"
   ]
 }
