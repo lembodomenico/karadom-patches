@@ -95,6 +95,8 @@
     "143_esegui_da_ricerca_azzera_ton_pitch.py",
     "144_play_youtube_pitch_dalla_riga.py",
     "145_righe_riwrap_larghezza_vera.py",
-    "148_refresh_mixer_su_applica.py"
+    "148_refresh_mixer_su_applica.py",
+    "150_applica_refresh_nomi.py",
+    "151_mixer_nomi_dal_banco.py"
   ]
 }
