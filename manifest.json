@@ -78,7 +78,6 @@
     "123_applica_senza_salto.py",
     "124_expander_polifonia_512.py",
     "125_banco_cifrato_kdb.py",
-    "126_banco_nascosto_scarica.py",
     "127_expander_apertura_piu_tempo.py",
     "128_expander_niente_stream.py",
     "129_sorgente_scelta_persiste.py",
@@ -99,6 +98,7 @@
     "150_applica_refresh_nomi.py",
     "151_mixer_nomi_dal_banco.py",
     "156_fade_non_rialza_volume.py",
-    "157_expander_auto_eq.py"
+    "157_expander_auto_eq.py",
+    "158_core_distribuzione.py"
   ]
 }
