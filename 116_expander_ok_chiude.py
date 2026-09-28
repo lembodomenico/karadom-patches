@@ -44,6 +44,18 @@ def apply():
             inst = _mx.MIDIMixerPanel.get_instance()
             if inst is not None and hasattr(inst, '_update_soundfont_display'):
                 inst._update_soundfont_display()
+                # ripopola anche i NOMI dei 16 canali dal banco nuovo (non solo la scritta SF)
+                try:
+                    import os
+                    mf = getattr(inst, 'current_midi_file', None)
+                    if mf and os.path.exists(mf):
+                        inst.load_midi_file(mf, melody_muted=False)
+                    else:
+                        for ch in getattr(inst, 'channels', []):
+                            try: ch['name_var'].set('---')
+                            except Exception: pass
+                except Exception as e2:
+                    print('[SORG116] ripopolo nomi:', e2)
         except Exception as e:
             print('[SORG116] refresh mixer:', e)
 

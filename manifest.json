@@ -89,6 +89,7 @@
     "135_suggerimenti_solo_dischi_presenti.py",
     "136_preferiti_aggiorna_delta.py",
     "138_ritrova_file_nei_preferiti.py",
+    "140_playlist_carica_cartella_madre.py",
     "141_playlist_albero_come_preferiti.py",
     "142_link_azzera_tonalita.py",
     "143_esegui_da_ricerca_azzera_ton_pitch.py",

@@ -26,8 +26,14 @@ def _banco():
     #    SOLO se e' un SoundFont VERO: il .kdl e' il banco interno CIFRATO e BASS
     #    non lo puo' caricare -> l'expander software non partirebbe. Si ripiega.
     p = _cfg('exp_banco_path', '')
-    if p and os.path.isfile(p) and os.path.splitext(p)[1].lower() in ('.sf2', '.sf3'):
-        return p
+    if p and os.path.isfile(p):
+        _ext = os.path.splitext(p)[1].lower()
+        if _ext in ('.sf2', '.sf3'):
+            return p
+        # il .kdl (banco cifrato) va bene SE la 125 e' attiva: la 125 hooka
+        # _load_soundfont e lo decifra in RAM (FontInitUser). Senza 125 BASS non lo apre.
+        if _ext == '.kdl' and str(_cfg('patch_125', '0')).strip() == '1':
+            return p
     # 2) altrimenti i file nella cartella Expander
     d = _exp_dir()
     for c in (os.path.join(d, 'banco_toh.sf3'), os.path.join(d, 'banco.sf3'),
