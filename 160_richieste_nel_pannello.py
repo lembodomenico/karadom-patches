@@ -278,6 +278,12 @@ def apply():
             return False
 
     def _show(self):
+        # aprendo il pannello richieste col bottone, se la scaletta è chiusa aprila
+        try:
+            if hasattr(self, 'toggle_slider') and not getattr(self, 'slider_visible', False):
+                self.toggle_slider(); _rrlog("apertura pannello: scaletta chiusa -> aperta")
+        except Exception as e:
+            _rrlog("apri scaletta err: %s" % e)
         if not _build(self):
             return
         try:
