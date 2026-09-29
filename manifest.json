@@ -102,8 +102,8 @@
     "154_banco_in_ram_niente_freeze.py",
     "156_fade_non_rialza_volume.py",
     "157_expander_auto_eq.py",
-    "158_core_distribuzione.py",
     "160_richieste_nel_pannello.py",
-    "161_mixer_remap_per_banco.py"
+    "161_mixer_remap_per_banco.py",
+    "163_core_kdl_max.py"
   ]
 }
