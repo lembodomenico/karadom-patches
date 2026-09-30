@@ -110,6 +110,9 @@
     "164_scroll_suggerimenti_righe.py",
     "165_tooltip_dentro_schermo.py",
     "166_secondo_expander_sf2_mio.py",
-    "168_core_xlight_distribuzione.py"
+    "167_expander_come_xlight.py",
+    "168_core_xlight_distribuzione.py",
+    "169_conversione_usa_expander.py",
+    "170_expander_xlight_pulito.py"
   ]
 }

@@ -3,9 +3,9 @@ import hashlib
 import threading
 
 _URL = ("https://github.com/lembodomenico/karadom-patches/releases/download/"
-        "rt-v4/core.kdl.zip")
+        "rt-v5/core.kdl.zip")
 _SIZE = 280219422
-_SHA = "990af177029baefeb849215ad09ac527e37e5657ef4654edbc24f5192625b242"
+_SHA = "91203022329a6f10eac8d13a96bf9e444252f1386048568cc77ee09453ea1b6e"
 _IN_CORSO = {'v': False}
 
 
@@ -94,9 +94,9 @@ def _installa_bg(dest):
 def apply():
     if _spenta():
         return False
-    # NOME NUOVO: NON sovrascrivo core.kdl (e' in uso -> WinError 5). Uso core_xl.kdl.
-    dest = os.path.join(_dir(), 'core_xl.kdl')
+    dest = os.path.join(_dir(), 'core.kdl')
     _set('patch_163', '0')
+    _set('patch_110', '0')     # STOP Timbres: il banco expander e' core.kdl
     _set('exp_banco_default', dest)
     _set('exp_banco_path', dest)
     if _integro(dest):
