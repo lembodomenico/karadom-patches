@@ -94,8 +94,8 @@ def _installa_bg(dest):
 def apply():
     if _spenta():
         return False
-    dest = os.path.join(_dir(), 'core.kdl')
-    # ferma la vecchia distribuzione HD MAX (2,29 GB) e punta al nuovo banco
+    # NOME NUOVO: NON sovrascrivo core.kdl (e' in uso -> WinError 5). Uso core_xl.kdl.
+    dest = os.path.join(_dir(), 'core_xl.kdl')
     _set('patch_163', '0')
     _set('exp_banco_default', dest)
     _set('exp_banco_path', dest)
