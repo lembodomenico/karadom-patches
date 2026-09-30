@@ -108,6 +108,8 @@
     "162_banco_tutto_in_ram.py",
     "163_core_kdl_max.py",
     "164_scroll_suggerimenti_righe.py",
-    "165_tooltip_dentro_schermo.py"
+    "165_tooltip_dentro_schermo.py",
+    "167_expander_come_xlight.py",
+    "168_core_xlight_distribuzione.py"
   ]
 }
