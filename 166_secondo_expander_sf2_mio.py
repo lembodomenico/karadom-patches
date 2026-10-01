@@ -74,7 +74,11 @@ def apply():
                     # 'mio', cambio solo il testo in "SF2 mio".
                     from moduli.bass_engine import get_bass_engine
                     soft = bool(getattr(get_bass_engine(), '_exp_soft_active', False))
-                    if soft and str(_cfg('exp_slot', 'default')) == 'mio':
+                    scelta = str(_cfg('sorgente_scelta', '')).lower()
+                    # ⛔ col FISICO non mostrare "SF2 mio" (il flag software puo'
+                    # restare True passando software->fisico): la scelta salvata dice
+                    # la verita'. Fisico -> lascia l'originale (etichetta del fisico).
+                    if soft and scelta != 'fisico' and str(_cfg('exp_slot', 'default')) == 'mio':
                         self.sf_label.config(
                             text="Expander (SF2 mio): %s" % _nome(_cfg('exp_banco_mio', '')),
                             fg='#FFD700')
