@@ -114,6 +114,7 @@
     "168_core_xlight_distribuzione.py",
     "169_conversione_usa_expander.py",
     "170_expander_xlight_pulito.py",
-    "174_ripristina_eq_leggera.py"
+    "174_ripristina_eq_leggera.py",
+    "175_radio_expander_piu_grandi.py"
   ]
 }
