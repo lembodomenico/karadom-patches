@@ -82,6 +82,15 @@ def apply():
                         self.sf_label.config(
                             text="Expander (SF2 mio): %s" % _nome(_cfg('exp_banco_mio', '')),
                             fg='#FFD700')
+                        # uscendo qui si saltava la rimozione del CARICA SF2 fatta
+                        # dalla 106 -> sul "mio" il 2° bottone riappariva. Lo tolgo qui.
+                        try:
+                            import tkinter as _tk
+                            for w in self.sf_label.master.winfo_children():
+                                if isinstance(w, _tk.Button) and 'SF2' in (w.cget('text') or '').upper():
+                                    w.pack_forget()
+                        except Exception:
+                            pass
                         return
                 except Exception:
                     pass
