@@ -9,7 +9,7 @@ T_HM = -17.0
 T_LOUD = -16.0
 CAP = 0.85
 VMAX = 2.0
-G_ATTESA = 0.7
+G_ATTESA = 1.0   # parte a volume NORMALE (non 0.7): niente "parte piano poi alza"
 
 
 def _spenta():
@@ -75,11 +75,10 @@ def _gain(eng, g, secs):
             h = b.BASS_ChannelSetFX(st, 9, 100)
             eng._fx_vol159 = h
             eng._fx_vol159_st = st
-            cur = g if secs <= 0 else G_ATTESA
-        else:
-            cur = -1.0
         if h:
-            b.BASS_FXSetParameters(h, ctypes.byref(_VOLP(float(g), float(cur), float(secs), 0)))
+            # ISTANTANEO: applico subito il volume giusto (fCurrent=fTarget=g, tempo=0).
+            # Niente rampa: prima "partiva piano e saliva man mano" -> brutto.
+            b.BASS_FXSetParameters(h, ctypes.byref(_VOLP(float(g), float(g), 0.0, 0)))
     except Exception as e:
         print('[AUTOEQ159] gain:', e)
 
