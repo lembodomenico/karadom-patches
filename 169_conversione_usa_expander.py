@@ -11,6 +11,44 @@ def _cfg(k, d=''):
         return d
 
 
+def _fx171(self, stream):
+    """Se e' attiva la 171 (X-Light clean-match), applico la SUA catena al render:
+    riverbero DX8 + DSP numpy (_cb) identico al vivo."""
+    if _cfg('patch_171', '1') == '0':
+        return False
+    p = os.path.join(os.environ.get("LOCALAPPDATA", ""), "KaraDom", "patches",
+                     "171_expander_xlight_clean_match.py")
+    if not os.path.isfile(p):
+        return False
+    spec = importlib.util.spec_from_file_location("xl171_exp", p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    import moduli.midi_mp3_exporter as MME
+    b = MME._lib.bass
+    DWORD = MME.DWORD
+
+    class REV(ctypes.Structure):
+        _fields_ = [("fInGain", ctypes.c_float), ("fReverbMix", ctypes.c_float),
+                    ("fReverbTime", ctypes.c_float), ("fHighFreqRTRatio", ctypes.c_float)]
+    b.BASS_ChannelSetFX.restype = DWORD
+    b.BASS_ChannelSetFX.argtypes = [DWORD, DWORD, ctypes.c_int]
+    b.BASS_FXSetParameters.argtypes = [DWORD, ctypes.c_void_p]
+    hr = b.BASS_ChannelSetFX(stream, 8, 26)   # DX8 reverb
+    if hr:
+        b.BASS_FXSetParameters(hr, ctypes.byref(
+            REV(0.0, float(mod._REV_MIX), float(mod._REV_MS), 0.5)))
+    b.BASS_ChannelSetDSP.restype = DWORD
+    b.BASS_ChannelSetDSP.argtypes = [DWORD, mod.DSPPROC, ctypes.c_void_p, ctypes.c_int]
+    mod._ST.clear()
+    b.BASS_ChannelSetDSP(stream, mod._cb, None, 0)
+    self._xl171_mod = mod
+    try:
+        self._log("Expander X-Light CLEAN-MATCH applicato al render (169->171)")
+    except Exception:
+        pass
+    return True
+
+
 def _fx170(self, stream):
     """Se e' attiva la 170 (EQ X-Light PULITA), applico le sue 5 bande DX8 al render."""
     if _cfg('patch_170', '1') == '0':
@@ -122,7 +160,12 @@ def apply():
 
     def _applica_fx_soft(self, stream):
         try:
-            if _fx170(self, stream):     # EQ X-Light pulita (attuale)
+            if _fx171(self, stream):     # X-Light clean-match (se attiva)
+                return
+        except Exception:
+            pass
+        try:
+            if _fx170(self, stream):     # EQ X-Light pulita
                 return
         except Exception:
             pass
