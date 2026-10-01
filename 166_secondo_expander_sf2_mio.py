@@ -68,26 +68,17 @@ def apply():
 
             def _usd(self):
                 try:
-                    if str(_cfg('exp_slot', 'default')) == 'mio':
-                        # mostra "SF2 mio" SUBITO quando lo slot e' 'mio' (come fanno
-                        # gia' le altre scelte). Prima dipendeva da get_active_player()
-                        # che con l'expander software e' None -> l'etichetta non cambiava.
-                        # Se pero' c'e' un expander FISICO attivo (porta MIDI reale)
-                        # lascio l'originale, cosi' il fisico resta riconosciuto.
-                        fisico = False
-                        try:
-                            from moduli.expander_midi import get_active_player
-                            p = get_active_player()
-                            porta = (getattr(p, 'nome_porta', '') or '').lower() if p else ''
-                            if porta and 'loop' not in porta and 'software' not in porta:
-                                fisico = True
-                        except Exception:
-                            pass
-                        if not fisico:
-                            self.sf_label.config(
-                                text="Expander (SF2 mio): %s" % _nome(_cfg('exp_banco_mio', '')),
-                                fg='#FFD700')
-                            return
+                    # STESSO metodo con cui "Expander Software" funziona (patch 109):
+                    # si basa su _exp_soft_active del bass engine, NON su
+                    # get_active_player(). Quando il software e' attivo e lo slot e'
+                    # 'mio', cambio solo il testo in "SF2 mio".
+                    from moduli.bass_engine import get_bass_engine
+                    soft = bool(getattr(get_bass_engine(), '_exp_soft_active', False))
+                    if soft and str(_cfg('exp_slot', 'default')) == 'mio':
+                        self.sf_label.config(
+                            text="Expander (SF2 mio): %s" % _nome(_cfg('exp_banco_mio', '')),
+                            fg='#FFD700')
+                        return
                 except Exception:
                     pass
                 return _ousd(self)
