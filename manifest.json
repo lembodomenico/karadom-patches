@@ -115,6 +115,7 @@
     "169_conversione_usa_expander.py",
     "170_expander_xlight_pulito.py",
     "174_ripristina_eq_leggera.py",
-    "175_radio_expander_piu_grandi.py"
+    "175_radio_expander_piu_grandi.py",
+    "177_personalita_xlight_auto.py"
   ]
 }
