@@ -432,16 +432,17 @@ def apply():
 
             def _usd(self, *a, **k):
                 r = _osf(self, *a, **k)
+                # tolgo "CARICA SF2" ad OGNI refresh (prima era una volta sola -> di
+                # tanto in tanto riappariva). Resta solo il bottone EXPANDER.
                 try:
                     lbl = getattr(self, 'sf_label', None)
-                    if lbl is not None and not getattr(self, '_sf2_tolto_106', False):
+                    if lbl is not None:
                         for w in lbl.master.winfo_children():
                             try:
                                 if isinstance(w, tk.Button) and 'SF2' in (w.cget('text') or '').upper():
                                     w.pack_forget()
                             except Exception:
                                 pass
-                        self._sf2_tolto_106 = True
                 except Exception:
                     pass
                 return r
