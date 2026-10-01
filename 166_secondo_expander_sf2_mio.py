@@ -69,8 +69,21 @@ def apply():
             def _usd(self):
                 try:
                     if str(_cfg('exp_slot', 'default')) == 'mio':
-                        from moduli.expander_midi import get_active_player
-                        if get_active_player():
+                        # mostra "SF2 mio" SUBITO quando lo slot e' 'mio' (come fanno
+                        # gia' le altre scelte). Prima dipendeva da get_active_player()
+                        # che con l'expander software e' None -> l'etichetta non cambiava.
+                        # Se pero' c'e' un expander FISICO attivo (porta MIDI reale)
+                        # lascio l'originale, cosi' il fisico resta riconosciuto.
+                        fisico = False
+                        try:
+                            from moduli.expander_midi import get_active_player
+                            p = get_active_player()
+                            porta = (getattr(p, 'nome_porta', '') or '').lower() if p else ''
+                            if porta and 'loop' not in porta and 'software' not in porta:
+                                fisico = True
+                        except Exception:
+                            pass
+                        if not fisico:
                             self.sf_label.config(
                                 text="Expander (SF2 mio): %s" % _nome(_cfg('exp_banco_mio', '')),
                                 fg='#FFD700')
