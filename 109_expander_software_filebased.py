@@ -144,7 +144,7 @@ def _applica_fx(eng):
         if hr:
             v = max(0, min(100, rev))
             mix = -96.0 if v == 0 else (-24.0 + (v / 100.0) * 24.0)
-            b.BASS_FXSetParameters(hr, ctypes.byref(DX8_REVERB(0.0, mix, 1500.0, 0.5)))
+            b.BASS_FXSetParameters(hr, ctypes.byref(DX8_REVERB(0.0, mix, 3000.0, 0.5)))  # ~RT X-Light (misurata)
     except Exception:
         pass
 
