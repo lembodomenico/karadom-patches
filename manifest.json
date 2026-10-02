@@ -116,6 +116,11 @@
     "170_expander_xlight_pulito.py",
     "174_ripristina_eq_leggera.py",
     "175_radio_expander_piu_grandi.py",
-    "177_personalita_xlight_auto.py"
+    "177_personalita_xlight_auto.py",
+    "178_mio_diretto_init.py",
+    "179_expander_brillantezza.py",
+    "180_blocco_volume_si_libera.py",
+    "181_apertura_esterna_muta_ch4.py",
+    "182_nomi_strumenti_brandizzati.py"
   ]
 }
