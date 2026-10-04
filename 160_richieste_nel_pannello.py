@@ -223,6 +223,7 @@ def apply():
                 except Exception:
                     pass
             self._rr_pending_id = _id
+            self._rr_pending_cant = cant
             # PRIMA dei suggerimenti: se il cantante ha una playlist con la canzone,
             # apri quella playlist sulla canzone. Altrimenti suggerimenti come sempre.
             if _prova_playlist(self, cant, brano):
@@ -428,6 +429,11 @@ def apply():
             try:
                 pid = getattr(self, '_rr_pending_id', None)
                 da_pl = k.get('from_playlist') or (len(a) >= 5 and a[4])
+                cant_riga = k.get('cantante', a[0] if a else '')
+                if pid is not None and not da_pl and _norm2(cant_riga) != _norm2(getattr(self, '_rr_pending_cant', '')):
+                    _rrlog("riga di '%s' non e' la richiesta id=%s di '%s': resta in attesa"
+                           % (cant_riga, pid, getattr(self, '_rr_pending_cant', '')))
+                    pid = None
                 if pid is not None and not da_pl:
                     _segna_inserito(pid, "")
                     iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
@@ -473,6 +479,10 @@ def apply():
             # se il brano viene da una richiesta remota -> inserito=1 nella tabella remota
             try:
                 pid = getattr(self, '_rr_pending_id', None)
+                cant_riga = k.get('cantante', a[0] if a else '')
+                if pid is not None and _norm2(cant_riga) != _norm2(getattr(self, '_rr_pending_cant', '')):
+                    _rrlog("+ playlist: '%s' non e' la richiesta id=%s: resta in attesa" % (cant_riga, pid))
+                    pid = None
                 if pid is not None:
                     _segna_inserito(pid, "+ playlist ")
                     iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
