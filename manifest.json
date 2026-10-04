@@ -122,6 +122,7 @@
     "180_blocco_volume_si_libera.py",
     "181_apertura_esterna_muta_ch4.py",
     "182_nomi_strumenti_brandizzati.py",
-    "190_overlay_immagine_veloce.py"
+    "190_overlay_immagine_veloce.py",
+    "192_stop_video_sicuro.py"
   ]
 }
