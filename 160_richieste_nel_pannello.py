@@ -1,14 +1,95 @@
 import sys, os, time
 
 
+import queue as _queue160
+import threading as _threading160
+
+_coda_log = _queue160.Queue()
+
+
+def _scrivi_log():
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    p = os.path.join(base, "KaraDom", "rr160.log")
+    while True:
+        righe = [_coda_log.get()]
+        while not _coda_log.empty():
+            righe.append(_coda_log.get_nowait())
+        try:
+            if os.path.exists(p) and os.path.getsize(p) > 2 * 1024 * 1024:
+                os.replace(p, p + ".vecchio")
+            with open(p, "a", encoding="utf-8") as f:
+                f.writelines(righe)
+        except Exception:
+            pass
+
+
+_threading160.Thread(target=_scrivi_log, name="Log160", daemon=True).start()
+
+
 def _rrlog(msg):
     try:
-        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-        p = os.path.join(base, "KaraDom", "rr160.log")
-        with open(p, "a", encoding="utf-8") as f:
-            f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
+        _coda_log.put_nowait("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
     except Exception:
         pass
+
+
+def _in_sfondo(fn, *a, **k):
+    _threading160.Thread(target=fn, args=a, kwargs=k, daemon=True).start()
+
+
+def _segna_inserito(pid, da_dove):
+    def _do():
+        try:
+            from moduli.requests_api_client import api_call
+            api_call('mark_inserted', ids=[pid]); _rrlog("%smark_inserted id=%s" % (da_dove, pid))
+        except Exception as e:
+            _rrlog("%smark err: %s" % (da_dove, e))
+    _in_sfondo(_do)
+
+
+import re as _re160
+
+_FRA_ARTISTI = _re160.compile(
+    r'\s*(?:,|;|&|\+|/|\s(?:feat\.?|ft\.?|featuring|e|and|con|with|vs\.?|x)\s)\s*', _re160.I)
+_FEAT_PAR = _re160.compile(r'\s*[\(\[]\s*(?:feat\.?|ft\.?|featuring|with|con)\s+([^\)\]]*)[\)\]]', _re160.I)
+_FEAT_CODA = _re160.compile(r'\s+(?:feat\.?|ft\.?|featuring)\s+(.*)$', _re160.I)
+_TAG_VERSIONE = _re160.compile(
+    r'[\(\[]?\b(?:duetto|duet|live|karaoke|base|versione|version|remix|acustica|acoustic|'
+    r'remastered|remaster)\b[\)\]]?', _re160.I)
+
+
+def _artisti(artista, extra=()):
+    fuori = []
+    for blocco in [str(artista or '')] + list(extra):
+        for a in _FRA_ARTISTI.split(blocco.strip()):
+            a = a.strip(' .-')
+            if a and a.lower() not in [x.lower() for x in fuori]:
+                fuori.append(a)
+    return fuori
+
+
+def _artisti_puliti(artista):
+    return ', '.join(_artisti(artista))
+
+
+def _filtro_pulito(brano, artista):
+    brano = str(brano or '').strip()
+    extra = []
+    m = _FEAT_PAR.search(brano)
+    while m:
+        extra.append(m.group(1))
+        brano = (brano[:m.start()] + ' ' + brano[m.end():]).strip()
+        m = _FEAT_PAR.search(brano)
+    m = _FEAT_CODA.search(brano)
+    if m:
+        extra.append(m.group(1))
+        brano = brano[:m.start()].strip()
+    senza = _re160.sub(r'\s+', ' ', _TAG_VERSIONE.sub(' ', brano)).strip(' -')
+    if senza:
+        brano = senza
+    arts = _artisti(artista, extra)
+    primo = arts[0] if arts else ''
+    return (brano + ' ' + primo).strip()
 
 
 def apply():
@@ -148,7 +229,7 @@ def apply():
                 _rrlog("selezione id=%s -> playlist" % _id)
                 return
             if hasattr(self, 'entry_filtro'):
-                _filtro = (brano + " " + artista).strip()
+                _filtro = _filtro_pulito(brano, artista)
                 _set_entry(self.entry_filtro, _filtro, PH_FILT)
                 try:
                     self._debounce_suggerimenti()
@@ -186,7 +267,7 @@ def apply():
                             elif "-" in tit:
                                 pp = tit.split("-", 1); artista = pp[0].strip(); brano = pp[1].strip()
                         iid = self._rr_tree.insert("", "end", values=(
-                            _id, cant, str(brano).upper(), str(artista).upper(), str(ton).upper(), cod))
+                            _id, cant, str(brano).upper(), _artisti_puliti(artista).upper(), str(ton).upper(), cod))
                         self._rr_map[_id] = iid
                     _titolo_aggiorna(self)
                     if chiudi_se_vuoto and len(rows) == 0:
@@ -348,10 +429,7 @@ def apply():
                 pid = getattr(self, '_rr_pending_id', None)
                 da_pl = k.get('from_playlist') or (len(a) >= 5 and a[4])
                 if pid is not None and not da_pl:
-                    try:
-                        _api()('mark_inserted', ids=[pid]); _rrlog("mark_inserted id=%s" % pid)
-                    except Exception as e:
-                        _rrlog("mark err: %s" % e)
+                    _segna_inserito(pid, "")
                     iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
                     try:
                         if iid and self._rr_tree.exists(iid):
@@ -396,10 +474,7 @@ def apply():
             try:
                 pid = getattr(self, '_rr_pending_id', None)
                 if pid is not None:
-                    try:
-                        _api()('mark_inserted', ids=[pid]); _rrlog("+ playlist mark_inserted id=%s" % pid)
-                    except Exception as e:
-                        _rrlog("+ playlist mark err: %s" % e)
+                    _segna_inserito(pid, "+ playlist ")
                     iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
                     try:
                         if iid and self._rr_tree.exists(iid):
