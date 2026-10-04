@@ -49,6 +49,24 @@ def _segna_inserito(pid, da_dove):
 
 import re as _re160
 
+_VER160 = 4
+
+
+def _originale160(obj, flag, attr, var):
+    o = getattr(obj, '_rr160_o_' + flag, None)
+    if o is not None:
+        return o
+    f = getattr(obj, attr)
+    if getattr(obj, '_rr160_' + flag, None) is True:
+        fn = getattr(f, '__func__', f)
+        try:
+            for nome, cella in zip(fn.__code__.co_freevars, fn.__closure__ or ()):
+                if nome == var:
+                    return cella.cell_contents
+        except Exception:
+            pass
+    return f
+
 _PREFISSO_NUM = _re160.compile(r'^\s*\d+\s*_\s*')
 
 
@@ -174,26 +192,28 @@ def apply():
             pls = Database.get_playlist_standalone_list() or []
         except Exception as e:
             _rrlog("get_playlist_list err: %s" % e); return False
-        nc = _norm2(cantante)
-        pl = None
-        for p in pls:
-            if _norm2(p.get('nome')) == nc:
-                pl = p; break
-        if pl is None:
+        nc = _norm2(_senza_numero(cantante) or cantante)
+        candidate = [p for p in pls if _norm2(_senza_numero(p.get('nome')) or p.get('nome')) == nc]
+        candidate.sort(key=lambda p: _norm2(p.get('nome')) != _norm2(cantante))
+        if not candidate:
             _rrlog("playlist cantante '%s' NON trovata" % cantante); return False
-        try:
-            brani = Database.get_playlist_standalone_brani(pl['id']) or []
-        except Exception as e:
-            _rrlog("get_brani err: %s" % e); return False
         nb = _norm2(brano)
         tok = [t for t in nb.split() if len(t) > 1]
-        trovato = None
-        for b in brani:
-            testo = _norm2("%s %s %s" % (b.get('artista') or '', b.get('titolo') or '', b.get('path') or ''))
-            if nb and (nb in testo or (tok and all(t in testo for t in tok))):
-                trovato = b; break
+        pl = brani = trovato = None
+        for p in candidate:
+            try:
+                bb = Database.get_playlist_standalone_brani(p['id']) or []
+            except Exception as e:
+                _rrlog("get_brani err: %s" % e); continue
+            for b in bb:
+                testo = _norm2("%s %s %s" % (b.get('artista') or '', b.get('titolo') or '', b.get('path') or ''))
+                if nb and (nb in testo or (tok and all(t in testo for t in tok))):
+                    pl, brani, trovato = p, bb, b; break
+            if trovato is not None:
+                break
         if trovato is None:
-            _rrlog("canzone '%s' non nella playlist di %s" % (brano, cantante)); return False
+            _rrlog("canzone '%s' non nelle playlist di %s (%s)" % (
+                brano, cantante, ', '.join(str(p.get('nome')) for p in candidate))); return False
         # apri la playlist con i suoi brani, filtrata sulla canzone
         try:
             if not getattr(self, 'slider_visible', False):
@@ -348,8 +368,9 @@ def apply():
                 sysobj = getattr(self, 'system', None)
                 if sysobj is not None:
                     Sc = type(sysobj)
-                    if hasattr(Sc, 'play') and not getattr(Sc, '_rr160_play', False):
-                        _op = Sc.play
+                    if hasattr(Sc, 'play') and getattr(Sc, '_rr160_play', None) != _VER160:
+                        _op = _originale160(Sc, 'play', 'play', '_op')
+                        Sc._rr160_o_play = _op
                         def play_wrap(s, *a, **k):
                             try:
                                 lib = getattr(s, 'libreria', None)
@@ -359,7 +380,7 @@ def apply():
                             except Exception:
                                 pass
                             return _op(s, *a, **k)
-                        Sc.play = play_wrap; Sc._rr160_play = True
+                        Sc.play = play_wrap; Sc._rr160_play = _VER160
             except Exception as e:
                 _rrlog("wrap play err: %s" % e)
             _rrlog("build OK")
@@ -417,8 +438,9 @@ def apply():
             _show(self)
 
     # wrap __init__: installa SOLO i metodi (build lazy al primo toggle)
-    if not getattr(C, '_rr160_init', False):
-        _orig_init = C.__init__
+    if getattr(C, '_rr160_init', None) != _VER160:
+        _orig_init = _originale160(C, 'init', '__init__', '_orig_init')
+        C._rr160_o_init = _orig_init
         def init_wrap(self, *a, **k):
             _orig_init(self, *a, **k)
             try:
@@ -428,11 +450,12 @@ def apply():
             except Exception as e:
                 _rrlog("init wrap err: %s" % e)
         C.__init__ = init_wrap
-        C._rr160_init = True
+        C._rr160_init = _VER160
 
     # wrap crea_riga: inserito=1 se veniva da remota
-    if not getattr(C, '_rr160_crea', False):
-        _orig_crea = C.crea_riga
+    if getattr(C, '_rr160_crea', None) != _VER160:
+        _orig_crea = _originale160(C, 'crea', 'crea_riga', '_orig_crea')
+        C._rr160_o_crea = _orig_crea
         def crea_wrap(self, *a, **k):
             r = _orig_crea(self, *a, **k)
             try:
@@ -462,11 +485,12 @@ def apply():
                 _rrlog("crea hook err: %s" % e)
             return r
         C.crea_riga = crea_wrap
-        C._rr160_crea = True
+        C._rr160_crea = _VER160
 
     # wrap toggle_slider: chiudi il pannello quando si CHIUDE la scaletta
-    if hasattr(C, 'toggle_slider') and not getattr(C, '_rr160_slider', False):
-        _ots = C.toggle_slider
+    if hasattr(C, 'toggle_slider') and getattr(C, '_rr160_slider', None) != _VER160:
+        _ots = _originale160(C, 'slider', 'toggle_slider', '_ots')
+        C._rr160_o_slider = _ots
         def ts_wrap(self, *a, **k):
             r = _ots(self, *a, **k)
             try:
@@ -477,12 +501,13 @@ def apply():
                 pass
             return r
         C.toggle_slider = ts_wrap
-        C._rr160_slider = True
+        C._rr160_slider = _VER160
 
     # wrap "+" dalla playlist: dopo aver messo il brano in scaletta, ESCI dalla
     # playlist e torna alla scaletta.
-    if hasattr(C, '_aggiungi_da_playlist') and not getattr(C, '_rr160_pladd', False):
-        _oadd = C._aggiungi_da_playlist
+    if hasattr(C, '_aggiungi_da_playlist') and getattr(C, '_rr160_pladd', None) != _VER160:
+        _oadd = _originale160(C, 'pladd', '_aggiungi_da_playlist', '_oadd')
+        C._rr160_o_pladd = _oadd
         def add_wrap(self, *a, **k):
             if 'cantante' in k:
                 k['cantante'] = _senza_numero(k['cantante']) or k['cantante']
@@ -521,7 +546,7 @@ def apply():
                 _rrlog("ripristina err: %s" % e)
             return r
         C._aggiungi_da_playlist = add_wrap
-        C._rr160_pladd = True
+        C._rr160_pladd = _VER160
 
     # il bottone richieste (campanella) ora fa TOGGLE del pannello.
     # ⛔ ui.py fa un import LOCALE `from .richieste_remote import apri_finestra_remoti`
