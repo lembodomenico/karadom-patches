@@ -49,6 +49,12 @@ def _segna_inserito(pid, da_dove):
 
 import re as _re160
 
+_PREFISSO_NUM = _re160.compile(r'^\s*\d+\s*_\s*')
+
+
+def _senza_numero(nome):
+    return _PREFISSO_NUM.sub('', str(nome or '')).strip()
+
 _FRA_ARTISTI = _re160.compile(
     r'\s*(?:,|;|&|\+|/|\s(?:feat\.?|ft\.?|featuring|e|and|con|with|vs\.?|x)\s)\s*', _re160.I)
 _FEAT_PAR = _re160.compile(r'\s*[\(\[]\s*(?:feat\.?|ft\.?|featuring|with|con)\s+([^\)\]]*)[\)\]]', _re160.I)
@@ -215,6 +221,8 @@ def apply():
             v = self._rr_tree.item(sel[0], "values")
             _id = v[0]; cant = str(v[1]).strip(); brano = str(v[2]).strip()
             artista = str(v[3]).strip(); ton = str(v[4]).strip()
+            cant_richiesta = cant
+            cant = _senza_numero(cant) or cant
             if hasattr(self, 'entry_cantante'):
                 _set_entry(self.entry_cantante, cant, PH_CANT)
             if hasattr(self, 'entry_ton'):
@@ -226,7 +234,8 @@ def apply():
             self._rr_pending_cant = cant
             # PRIMA dei suggerimenti: se il cantante ha una playlist con la canzone,
             # apri quella playlist sulla canzone. Altrimenti suggerimenti come sempre.
-            if _prova_playlist(self, cant, brano):
+            if _prova_playlist(self, cant, brano) or (
+                    cant_richiesta != cant and _prova_playlist(self, cant_richiesta, brano)):
                 _rrlog("selezione id=%s -> playlist" % _id)
                 return
             if hasattr(self, 'entry_filtro'):
@@ -430,7 +439,7 @@ def apply():
                 pid = getattr(self, '_rr_pending_id', None)
                 da_pl = k.get('from_playlist') or (len(a) >= 5 and a[4])
                 cant_riga = k.get('cantante', a[0] if a else '')
-                if pid is not None and not da_pl and _norm2(cant_riga) != _norm2(getattr(self, '_rr_pending_cant', '')):
+                if pid is not None and not da_pl and _norm2(_senza_numero(cant_riga)) != _norm2(_senza_numero(getattr(self, '_rr_pending_cant', ''))):
                     _rrlog("riga di '%s' non e' la richiesta id=%s di '%s': resta in attesa"
                            % (cant_riga, pid, getattr(self, '_rr_pending_cant', '')))
                     pid = None
@@ -475,12 +484,16 @@ def apply():
     if hasattr(C, '_aggiungi_da_playlist') and not getattr(C, '_rr160_pladd', False):
         _oadd = C._aggiungi_da_playlist
         def add_wrap(self, *a, **k):
+            if 'cantante' in k:
+                k['cantante'] = _senza_numero(k['cantante']) or k['cantante']
+            elif a:
+                a = ((_senza_numero(a[0]) or a[0]),) + tuple(a[1:])
             r = _oadd(self, *a, **k)
             # se il brano viene da una richiesta remota -> inserito=1 nella tabella remota
             try:
                 pid = getattr(self, '_rr_pending_id', None)
                 cant_riga = k.get('cantante', a[0] if a else '')
-                if pid is not None and _norm2(cant_riga) != _norm2(getattr(self, '_rr_pending_cant', '')):
+                if pid is not None and _norm2(_senza_numero(cant_riga)) != _norm2(_senza_numero(getattr(self, '_rr_pending_cant', ''))):
                     _rrlog("+ playlist: '%s' non e' la richiesta id=%s: resta in attesa" % (cant_riga, pid))
                     pid = None
                 if pid is not None:
