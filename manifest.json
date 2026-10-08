@@ -124,6 +124,7 @@
     "182_nomi_strumenti_brandizzati.py",
     "190_overlay_immagine_veloce.py",
     "192_stop_video_sicuro.py",
-    "194_youtube_server_multiplo.py"
+    "194_youtube_server_multiplo.py",
+    "195_scala_finestra_mai_zero.py"
   ]
 }
