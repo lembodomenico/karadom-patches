@@ -49,7 +49,10 @@ def _segna_inserito(pid, da_dove):
 
 import re as _re160
 
-_VER160 = 4
+_VER160 = 7
+
+_MODIFICHE160 = {}
+_INSERITE160 = set()
 
 
 def _originale160(obj, flag, attr, var):
@@ -269,6 +272,88 @@ def apply():
         except Exception as e:
             _rrlog("on_sel err: %s" % e)
 
+    def _menu_riga(self, e):
+        try:
+            iid = self._rr_tree.identify_row(e.y)
+            if not iid:
+                return
+            self._rr_tree.selection_set(iid); self._rr_tree.focus(iid)
+            m = tk.Menu(self._rr_tree, tearoff=0, bg="#2a2a2a", fg="white", activebackground="#0078D7",
+                        activeforeground="white", font=F("Segoe UI", 12, "bold"))
+            m.add_command(label="\u270F  Modifica", command=lambda: _modifica(self, iid))
+            m.tk_popup(e.x_root, e.y_root)
+        except Exception as ex:
+            _rrlog("menu riga err: %s" % ex)
+
+    def _modifica(self, iid):
+        try:
+            v = list(self._rr_tree.item(iid, "values"))
+        except Exception:
+            return
+        while len(v) < 6:
+            v.append('')
+        top = tk.Toplevel(self._rr_frame)
+        top.title("Modifica richiesta")
+        top.configure(bg="#1a1a1a")
+        top.transient(self._rr_frame.winfo_toplevel())
+        top.resizable(False, False)
+        tk.Label(top, text="\u270F MODIFICA RICHIESTA", bg="#1a1a1a", fg="#ffd700",
+                 font=F("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=S(12), pady=(S(10), S(6)))
+        campi = []
+        for r, (nome, val, larg) in enumerate((("CANTANTE", v[1], 34), ("BRANO", v[2], 34),
+                                               ("ARTISTA", v[3], 34), ("TONALITA'", v[4], 6)), start=1):
+            tk.Label(top, text=nome, bg="#1a1a1a", fg="#00d4ff", font=F("Segoe UI", 11, "bold"),
+                     anchor="w").grid(row=r, column=0, sticky="w", padx=S(12), pady=S(4))
+            en = tk.Entry(top, width=larg, bg="#2a2a2a", fg="white", insertbackground="white", relief="flat",
+                          font=F("Segoe UI", 12, "bold"))
+            en.insert(0, str(val))
+            en.grid(row=r, column=1, sticky="w", padx=(0, S(12)), pady=S(4), ipady=S(3))
+            campi.append(en)
+
+        def salva(_e=None):
+            nuovi = tuple(en.get().strip() for en in campi)
+            _id = v[0]
+            _MODIFICHE160[str(_id)] = nuovi
+            try:
+                if self._rr_tree.exists(iid):
+                    self._rr_tree.item(iid, values=(_id,) + nuovi + (v[5],))
+            except Exception:
+                pass
+            _rrlog("modifica id=%s -> %r" % (_id, nuovi))
+
+            def _invia():
+                try:
+                    r = _api()('update_request', id=int(_id), cantante=nuovi[0], brano=nuovi[1],
+                               artista=nuovi[2], ton=nuovi[3])
+                    _rrlog("update_request id=%s: %r" % (_id, r))
+                except Exception as ex:
+                    _rrlog("update_request err: %s" % ex)
+            _in_sfondo(_invia)
+            top.destroy()
+            try:
+                if str(getattr(self, '_rr_pending_id', '')) == str(_id) or iid in self._rr_tree.selection():
+                    _on_sel(self)
+            except Exception:
+                pass
+
+        bt = tk.Frame(top, bg="#1a1a1a")
+        bt.grid(row=5, column=0, columnspan=2, sticky="e", padx=S(12), pady=(S(8), S(12)))
+        tk.Button(bt, text="ANNULLA", bg="#444444", fg="white", relief="flat", bd=0, cursor="hand2",
+                  font=F("Segoe UI", 11, "bold"), padx=S(14), pady=S(4), command=top.destroy).pack(side=tk.RIGHT)
+        tk.Button(bt, text="SALVA", bg="#28a745", fg="white", relief="flat", bd=0, cursor="hand2",
+                  font=F("Segoe UI", 11, "bold"), padx=S(14), pady=S(4), command=salva).pack(side=tk.RIGHT, padx=(0, S(8)))
+        top.bind("<Return>", salva)
+        top.bind("<Escape>", lambda e: top.destroy())
+        try:
+            top.update_idletasks()
+            x = self._rr_frame.winfo_rootx() + (self._rr_frame.winfo_width() - top.winfo_width()) // 2
+            y = self._rr_frame.winfo_rooty() + S(20)
+            top.geometry("+%d+%d" % (max(0, x), max(0, y)))
+            top.grab_set()
+            campi[0].focus_set(); campi[0].select_range(0, tk.END)
+        except Exception:
+            pass
+
     def _carica(self, chiudi_se_vuoto=False):
         import threading
         def _worker():
@@ -287,7 +372,10 @@ def apply():
                     self._rr_tree.delete(*self._rr_tree.get_children())
                     self._rr_map = {}
                     for r in rows:
-                        _id = r.get('ID'); cant = str(r.get('CANTANTE') or '').upper()
+                        _id = r.get('ID')
+                        if str(_id) in _INSERITE160:
+                            continue
+                        cant = str(r.get('CANTANTE') or '').upper()
                         tit = str(r.get('BRANO') or '').strip(); art = str(r.get('ARTISTA') or '').strip()
                         ton = str(r.get('TON') or ''); cod = str(r.get('CODICE_PRENOTAZIONE') or '')
                         brano = tit; artista = art; low = tit.lower()
@@ -296,8 +384,10 @@ def apply():
                                 pp = tit.split(" - ", 1); artista = pp[0].strip(); brano = pp[1].strip()
                             elif "-" in tit:
                                 pp = tit.split("-", 1); artista = pp[0].strip(); brano = pp[1].strip()
-                        iid = self._rr_tree.insert("", "end", values=(
-                            _id, cant, str(brano).upper(), _artisti_puliti(artista).upper(), str(ton).upper(), cod))
+                        valori = (_id, cant, str(brano).upper(), _artisti_puliti(artista).upper(), str(ton).upper(), cod)
+                        if str(_id) in _MODIFICHE160:
+                            valori = (_id,) + _MODIFICHE160[str(_id)] + (cod,)
+                        iid = self._rr_tree.insert("", "end", values=valori)
                         self._rr_map[_id] = iid
                     _titolo_aggiorna(self)
                     if chiudi_se_vuoto and len(rows) == 0:
@@ -362,6 +452,7 @@ def apply():
             tv.column("codice", width=0, stretch=False)
             tv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); sb.config(command=tv.yview)
             tv.bind("<<TreeviewSelect>>", lambda e: _on_sel(self))
+            tv.bind("<Button-3>", lambda e: _menu_riga(self, e))
             self._rr_dock_done = True
             # chiudi il pannello quando PARTE la riproduzione (system.play)
             try:
@@ -428,6 +519,46 @@ def apply():
         except Exception as e:
             _rrlog("hide err: %s" % e)
 
+    def _togli_riga(self, pid):
+        try:
+            mappa = getattr(self, '_rr_map', {}) or {}
+            iid = None
+            for k in list(mappa):
+                if str(k) == str(pid):
+                    iid = mappa.pop(k)
+            if iid is None:
+                for i in self._rr_tree.get_children():
+                    if str(self._rr_tree.item(i, 'values')[0]) == str(pid):
+                        iid = i
+            if iid and self._rr_tree.exists(iid):
+                self._rr_tree.delete(iid); _titolo_aggiorna(self)
+        except Exception as e:
+            _rrlog("togli riga err: %s" % e)
+
+    def _svuota_campi(self):
+        try:
+            if hasattr(self, 'entry_cantante'):
+                _set_entry(self.entry_cantante, '', PH_CANT)
+            if hasattr(self, 'entry_filtro'):
+                _set_entry(self.entry_filtro, '', PH_FILT)
+            if hasattr(self, 'entry_ton'):
+                self.entry_ton.delete(0, tk.END); self.entry_ton.insert(0, '0')
+            _rrlog("richiesta inserita -> campi svuotati")
+        except Exception as e:
+            _rrlog("svuota campi err: %s" % e)
+
+    def _dopo_inserita(self):
+        try:
+            if not getattr(self, '_rr_dock_done', False):
+                return
+            if not self._rr_tree.get_children():
+                _hide(self); _rrlog("ultima richiesta inserita -> chiudo")
+            elif getattr(self, '_rr_visible', False):
+                self._rr_frame.lift(); _rrlog("richiesta inserita, altre in attesa -> resta aperto")
+            _carica(self, chiudi_se_vuoto=True)
+        except Exception as e:
+            _rrlog("dopo inserita err: %s" % e)
+
     def _toggle(self):
         _rrlog("toggle chiamato (visible=%s)" % getattr(self, '_rr_visible', None))
         if getattr(self, '_rr_visible', False):
@@ -468,19 +599,11 @@ def apply():
                     pid = None
                 if pid is not None and not da_pl:
                     _segna_inserito(pid, "")
-                    iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
-                    try:
-                        if iid and self._rr_tree.exists(iid):
-                            self._rr_tree.delete(iid); _titolo_aggiorna(self)
-                    except Exception:
-                        pass
+                    _INSERITE160.add(str(pid))
+                    _togli_riga(self, pid)
                     self._rr_pending_id = None
-                    # refresh completo delle richieste dal server
-                    try:
-                        if getattr(self, '_rr_dock_done', False):
-                            _carica(self)
-                    except Exception:
-                        pass
+                    _dopo_inserita(self)
+                    _svuota_campi(self)
             except Exception as e:
                 _rrlog("crea hook err: %s" % e)
             return r
@@ -514,6 +637,7 @@ def apply():
             elif a:
                 a = ((_senza_numero(a[0]) or a[0]),) + tuple(a[1:])
             r = _oadd(self, *a, **k)
+            richiesta_fatta = False
             # se il brano viene da una richiesta remota -> inserito=1 nella tabella remota
             try:
                 pid = getattr(self, '_rr_pending_id', None)
@@ -523,18 +647,11 @@ def apply():
                     pid = None
                 if pid is not None:
                     _segna_inserito(pid, "+ playlist ")
-                    iid = (getattr(self, '_rr_map', {}) or {}).pop(pid, None)
-                    try:
-                        if iid and self._rr_tree.exists(iid):
-                            self._rr_tree.delete(iid); _titolo_aggiorna(self)
-                    except Exception:
-                        pass
+                    _INSERITE160.add(str(pid))
+                    _togli_riga(self, pid)
                     self._rr_pending_id = None
-                    try:
-                        if getattr(self, '_rr_dock_done', False):
-                            _carica(self)
-                    except Exception:
-                        pass
+                    richiesta_fatta = True
+                    _dopo_inserita(self)
             except Exception as e:
                 _rrlog("+ playlist hook err: %s" % e)
             # esci dalla playlist e torna alla scaletta
@@ -544,6 +661,12 @@ def apply():
                     _rrlog("+ da playlist: tornato alla scaletta")
             except Exception as e:
                 _rrlog("ripristina err: %s" % e)
+            if richiesta_fatta:
+                _svuota_campi(self)
+                try:
+                    self.entry_cantante.winfo_toplevel().after(150, lambda: _svuota_campi(self))
+                except Exception:
+                    pass
             return r
         C._aggiungi_da_playlist = add_wrap
         C._rr160_pladd = _VER160

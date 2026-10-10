@@ -125,6 +125,16 @@
     "190_overlay_immagine_veloce.py",
     "192_stop_video_sicuro.py",
     "194_youtube_server_multiplo.py",
-    "195_scala_finestra_mai_zero.py"
+    "195_scala_finestra_mai_zero.py",
+    "196_avvio_senza_attesa.py",
+    "197_sincronizza_su_e_giu.py",
+    "198_percorsi_relativi.py",
+    "199_tonalita_resta_aggiungendo.py",
+    "200_cantante_nuovo_nel_giro.py",
+    "201_strumento_mixer_resta.py",
+    "202_suggerimenti_senza_doppi.py",
+    "203_strumento_mixer_resta_expander.py",
+    "204_suggerimenti_titoli_uguali_una_volta.py",
+    "205_registrazione_e_lista_dal_play.py"
   ]
 }
