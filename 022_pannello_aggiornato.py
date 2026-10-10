@@ -1,6 +1,8 @@
 # 022 - lo stato delle patch arriva al pannello anche durante la sessione.
 
 OGNI_SECONDI = 120
+_VER = 2
+NOME_SORVEGLIA = "StatoPatch022v%d" % _VER
 NOMI_THREAD = ("PatchUpdater", "PatchAlloSplash", "PatchAllAvvio")
 
 _ultimo = {'inviato': None}
@@ -162,7 +164,9 @@ def manda_al_pannello(forza=False):
     dati = stato_completo()
     if not dati:
         return False
-    compatto = json.dumps(dati, ensure_ascii=False, separators=(',', ':'))[:3000]
+    # INTERO: tagliato a 3000 diventava JSON monco e il server lo buttava (con ~125+ patch
+    # il PC spariva dal pannello). Si manda in POST: nessun limite di lunghezza dell'indirizzo.
+    compatto = json.dumps(dati, ensure_ascii=False, separators=(',', ':'))
     if not forza and compatto == _ultimo['inviato']:
         return False          # non e' cambiato niente: non si disturba il server
 
@@ -186,14 +190,17 @@ def manda_al_pannello(forza=False):
         if ver:
             break
 
-    q = urllib.parse.urlencode({'serial': serial, 'v': ver, 'p': compatto})
+    q = urllib.parse.urlencode({'serial': serial, 'v': ver})
+    corpo = urllib.parse.urlencode({'p': compatto}).encode('utf-8')
     contesti = _contesti_ssl()
     for base in ("https://karadom.it/heartbeat.php",
                  "https://www.karadom.it/heartbeat.php"):
         for ctx in (contesti or [None]):
             try:
                 req = urllib.request.Request(
-                    base + '?' + q, headers={'User-Agent': 'KaraDom/patch'})
+                    base + '?' + q, data=corpo, headers={
+                        'User-Agent': 'KaraDom/patch',
+                        'Content-Type': 'application/x-www-form-urlencoded'})
                 kw = {'timeout': 10}
                 if ctx is not None:
                     kw['context'] = ctx
@@ -219,7 +226,7 @@ def _sorveglia():
                 pass
             time.sleep(OGNI_SECONDI)
 
-    threading.Thread(target=gira, daemon=True, name="StatoPatch022").start()
+    threading.Thread(target=gira, daemon=True, name=NOME_SORVEGLIA).start()
 
 
 def apply():
@@ -231,7 +238,9 @@ def apply():
             _ripara_hotfix()
         except Exception:
             pass
-        if any(t.name == "StatoPatch022" for t in threading.enumerate()):
+        # nome con la VERSIONE: al primo avvio dopo l'aggiornamento gira anche la 022 vecchia
+        # (thread "StatoPatch022"); col nome uguale la nuova non partiva fino al riavvio
+        if any(t.name == NOME_SORVEGLIA for t in threading.enumerate()):
             return True
         _sorveglia()
         return True
