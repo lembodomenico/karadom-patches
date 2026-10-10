@@ -1,7 +1,7 @@
 # 022 - lo stato delle patch arriva al pannello anche durante la sessione.
 
 OGNI_SECONDI = 120
-_VER = 2
+_VER = 3
 NOME_SORVEGLIA = "StatoPatch022v%d" % _VER
 NOMI_THREAD = ("PatchUpdater", "PatchAlloSplash", "PatchAllAvvio")
 
@@ -14,6 +14,49 @@ def _spenta():
         return str(Database.get_config('patch_022', '1')).strip() in ('0', 'no', 'off')
     except Exception:
         return False
+
+
+def _perche_spenta(numero):
+    """Spenta di proposito: dall'impostazione patch_NNN=0, oppure ha visto che qui non serve."""
+    try:
+        from moduli.database import Database
+        if str(Database.get_config('patch_%s' % numero, '1')).strip() in ('0', 'no', 'off'):
+            return 'spenta da impostazione (patch_%s=0)' % numero
+    except Exception:
+        pass
+    return 'non adatta a questo PC (si e\' spenta da sola)'
+
+
+def _ricorda_le_attive():
+    """Una patch che si e' attivata RESTA attiva per tutta la sessione.
+
+    KaraDom esegue le patch piu' volte all'avvio (splash, avvio, a caldo): dalla seconda
+    molte trovano l'aggancio gia' fatto e rispondono "no". hotfix tiene l'ULTIMA risposta,
+    cosi' una patch che funziona risultava "non attiva" (037, 044 su tutti i PC).
+    Vale per TUTTE le patch, presenti e future: nessuna deve gestirlo da se'."""
+    from moduli import hotfix
+    vera = getattr(hotfix, '_esegui_apply', None)
+    if vera is None or getattr(vera, '_ricorda022', False):
+        return
+    attive = set()
+
+    def _esegui_apply(ns, nome, *a, **k):
+        esito = vera(ns, nome, *a, **k)
+        try:
+            app = getattr(hotfix, 'APPLICATE', None)
+            if esito:
+                attive.add(nome)
+            elif nome in attive or (isinstance(app, set) and nome in app):
+                # gia' attiva da un passaggio precedente: il "no" di adesso vuol dire "gia' fatto"
+                st = getattr(hotfix, 'STATO', None)
+                if isinstance(st, dict):
+                    st[nome] = {'ok': True, 'nota': 'attiva'}
+                return True
+        except Exception:
+            pass
+        return esito
+    _esegui_apply._ricorda022 = True
+    hotfix._esegui_apply = _esegui_apply
 
 
 def _ripara_hotfix():
@@ -114,13 +157,23 @@ def stato_completo():
         percorso = os.path.join(cartella, nome)
         buona = firma_buona(percorso)
 
+        stato = (getattr(hotfix, 'STATO', None) or {}).get(nome)
         if applicate:                            # la fonte piu' precisa
             if nome in applicate:
                 fuori[corto] = [1, '']
-            elif buona:
-                fuori[corto] = [2, 'scaricata, entra al riavvio']
-            else:
+            elif buona is False or buona is None:
                 fuori[corto] = [0, 'firma mancante o non valida']
+            elif isinstance(stato, dict) and not stato.get('ok'):
+                nota = str(stato.get('nota') or '')
+                if 'errore' in nota:
+                    # eseguita e andata in ERRORE: rossa, col messaggio vero
+                    fuori[corto] = [0, nota[:160]]
+                else:
+                    # ha deciso lei di non attivarsi: spenta da impostazione o non adatta a questo PC
+                    fuori[corto] = [3, _perche_spenta(corto)]
+            else:
+                # firmata bene ma in questa sessione non e' ancora stata eseguita: entra al riavvio
+                fuori[corto] = [2, 'scaricata, entra al riavvio']
         elif buona:                              # compilato vecchio: vale la firma
             fuori[corto] = [1, '']
         elif buona is False:
@@ -236,6 +289,10 @@ def apply():
         import threading
         try:
             _ripara_hotfix()
+        except Exception:
+            pass
+        try:
+            _ricorda_le_attive()
         except Exception:
             pass
         # nome con la VERSIONE: al primo avvio dopo l'aggiornamento gira anche la 022 vecchia
