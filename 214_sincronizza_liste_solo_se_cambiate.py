@@ -1,5 +1,5 @@
 # 214 - preferiti e playlist: niente rete senza richieste remote, invio solo se cambiati (= 091 v2)
-# PER ORA SOLO SUI PC DEL GESTORE (DOMMSI, DOMHP, KARADOM, KaraDomOS): sugli altri non fa niente
+# [11-10-2026] estesa a TUTTI i PC (prima solo quelli del gestore)
 SOLO_SERIALI = ('1A55-2CD1-3303-20EB', '64D4-81C3-65D3-C024', '0182-5846-232C-930E', '4D8E-F63F-45E1-8F06')
 
 
@@ -18,8 +18,6 @@ def _pc_del_gestore():
 
 
 def _spenta():
-    if not _pc_del_gestore():
-        return True
     try:
         from moduli.database import Database
         return str(Database.get_config('patch_214', '1')) == '0'

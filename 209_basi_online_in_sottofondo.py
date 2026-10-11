@@ -5,7 +5,7 @@ CODICE_BASI = '\n# ── [11-10-2026] scaricamento in sottofondo (prima: dentro
 CODICE_PLAY = '\ndef avvolgi_play_brano(classe):\n    """Avvolge LibreriaSlider.play_brano: \'kdmonline://\' -> scaricamento in sottofondo, poi play."""\n    if getattr(classe.play_brano, \'_bo209\', False):\n        return                          # gia\' avvolta (e nessuno l\'ha rimpiazzata dopo)\n    vera = classe.play_brano            # quella che c\'e\' ADESSO (la 032 la rimette a ogni passaggio)\n\n    def play_brano(self, path, entry_ton=None, cantante="", brano="", tonalita=None, *a, **k):\n        if isinstance(path, str) and path.startswith(\'kdmonline://\'):\n            db_id = path[len(\'kdmonline://\'):]\n            # la tonalita\' della riga si legge ADESSO (la riga puo\' cambiare mentre si scarica)\n            if tonalita is None and entry_ton is not None:\n                try:\n                    tonalita = int(entry_ton.get().strip() or "0")\n                except Exception:\n                    tonalita = None\n\n            def _avvisa(testo):\n                try:\n                    ref = getattr(self, \'info_brano_ref\', None) or {}\n                    if ref.get(\'brano\'):\n                        ref[\'brano\'].config(text=testo)\n                except Exception:\n                    pass\n                print(f"[basi_online] {testo}")\n\n            def _pronta(percorso):\n                if not percorso:\n                    try:\n                        from tkinter import messagebox\n                        messagebox.showerror("Errore", "Impossibile scaricare il brano online.\\nVerifica la connessione o la licenza.",\n                                             parent=self.parent)\n                    except Exception:\n                        pass\n                    return\n                vera(self, percorso, None, cantante, brano, tonalita, *a, **k)\n\n            import sys\n            mod = sys.modules.get(\'moduli.basi_online\')\n            if mod is None:\n                from moduli import basi_online as mod\n            mod.scarica_in_sfondo(self.parent, db_id, _pronta, _avvisa)\n            return None\n        return vera(self, path, entry_ton, cantante, brano, tonalita, *a, **k)\n\n    play_brano._bo209 = True\n    classe.play_brano = play_brano\n'
 
 
-# PER ORA SOLO SUI PC DEL GESTORE (DOMMSI, DOMHP, KARADOM, KaraDomOS): sugli altri non fa niente
+# [11-10-2026] estesa a TUTTI i PC (prima solo quelli del gestore)
 SOLO_SERIALI = ('1A55-2CD1-3303-20EB', '64D4-81C3-65D3-C024', '0182-5846-232C-930E', '4D8E-F63F-45E1-8F06')
 
 
@@ -24,8 +24,6 @@ def _pc_del_gestore():
 
 
 def _spenta():
-    if not _pc_del_gestore():
-        return True
     try:
         from moduli.database import Database
         return str(Database.get_config('patch_209', '1')).strip() in ('0', 'no', 'off')
