@@ -3,7 +3,7 @@
 _VER = 1
 
 # [11-10-2026] per ora SOLO sul portatile KaraDom OS (ThinkPad L15)
-SOLO_SERIALI = ('4D8E-F63F-45E1-8F06',)
+SOLO_SERIALI = ('4D8E-F63F-45E1-8F06', '1E49-898D-7E7D-E899')   # disco interno, chiavetta 64 GB
 
 
 def _pc_giusto():
