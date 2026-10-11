@@ -144,7 +144,9 @@
     "212_campanella_solo_numero.py",
     "213_aggiornamenti_tentativi_corti.py",
     "214_sincronizza_liste_solo_se_cambiate.py",
-    "215_avvio_meno_chiamate.py"
+    "215_avvio_meno_chiamate.py",
+    "216_licenza_avvio_senza_attesa.py",
+    "217_finestra_non_si_ferma.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -291,6 +293,8 @@
     "212_campanella_solo_numero.py": "00bdd5f6132a3547",
     "213_aggiornamenti_tentativi_corti.py": "5ad5b0eb1b347ef0",
     "214_sincronizza_liste_solo_se_cambiate.py": "1b6aa26dd8701ac4",
-    "215_avvio_meno_chiamate.py": "aee1bf569ab7e4b6"
+    "215_avvio_meno_chiamate.py": "aee1bf569ab7e4b6",
+    "216_licenza_avvio_senza_attesa.py": "1da34e24811e8d68",
+    "217_finestra_non_si_ferma.py": "abac439aeb5da05a"
   }
 }
