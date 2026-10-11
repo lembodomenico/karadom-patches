@@ -6,6 +6,9 @@ _URL = ("https://github.com/lembodomenico/karadom-patches/releases/download/"
         "rt-v5/core.kdl.zip")
 _SIZE = 280219422
 _SHA = "91203022329a6f10eac8d13a96bf9e444252f1386048568cc77ee09453ea1b6e"
+# [11-10-2026] anche kdl4_full (stessa dimensione) e' un core valido: e' il core di KaraDom OS.
+# Senza questo la 168 lo trovava "non integro" e lo sovrascriveva con X-Light a ogni avvio.
+_SHA_OK = (_SHA, "050a0bab3866d2db7f2e0bb3f38ec0960c086c2e9ef03677257b3e1d846c351a")
 _IN_CORSO = {'v': False}
 
 
@@ -39,7 +42,7 @@ def _integro(dest):
         with open(dest, 'rb') as f:
             for b in iter(lambda: f.read(1024 * 1024), b''):
                 h.update(b)
-        return h.hexdigest() == _SHA
+        return h.hexdigest() in _SHA_OK
     except Exception:
         return False
 
