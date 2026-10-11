@@ -147,7 +147,8 @@
     "214_sincronizza_liste_solo_se_cambiate.py",
     "215_avvio_meno_chiamate.py",
     "216_licenza_avvio_senza_attesa.py",
-    "217_finestra_non_si_ferma.py"
+    "217_finestra_non_si_ferma.py",
+    "218_forza_aggiorna_patch.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -297,6 +298,7 @@
     "214_sincronizza_liste_solo_se_cambiate.py": "596ce2cb75808684",
     "215_avvio_meno_chiamate.py": "588927e6c11d7fe5",
     "216_licenza_avvio_senza_attesa.py": "685ee06b9de50bb2",
-    "217_finestra_non_si_ferma.py": "36fe90433b5d0196"
+    "217_finestra_non_si_ferma.py": "36fe90433b5d0196",
+    "218_forza_aggiorna_patch.py": "c354dff091e48dba"
   }
 }
