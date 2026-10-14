@@ -1,8 +1,8 @@
 # 218 - menu Extra: "Forza aggiornamento patch"
 
-_VER = 1
+_VER = 2
 
-# [11-10-2026] per ora SOLO sul portatile KaraDom OS (ThinkPad L15)
+# [14-10-2026] su tutti i PC (prima solo sul portatile KaraDom OS)
 SOLO_SERIALI = ('4D8E-F63F-45E1-8F06', '1E49-898D-7E7D-E899')   # disco interno, chiavetta 64 GB
 
 
@@ -132,12 +132,12 @@ def apri(root):
 
 
 def apply():
-    if _spenta() or not _pc_giusto():
+    if _spenta():
         return False
     try:
         from moduli import updater
         if hasattr(updater, 'apri_forza_patch'):
-            return False        # KaraDom ricompilato: la voce c'e' gia' nel menu
+            return True         # KaraDom ricompilato: la voce c'e' gia' nel menu
     except Exception:
         pass
     import tkinter as tk
