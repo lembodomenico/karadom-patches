@@ -7,7 +7,7 @@ import threading
 import time
 import urllib.request
 
-_VER = 1
+_VER = 2
 API = "https://api.github.com/repos/lembodomenico/karadom-patches/commits/main"
 RAW = "https://raw.githubusercontent.com/lembodomenico/karadom-patches"
 INTESTAZIONI = {"User-Agent": "KaraDom Pro Updater", "Cache-Control": "no-cache"}
@@ -41,13 +41,20 @@ def aggiorna_prima_di_caricare(d, verifica, scadenza):
     sul disco); se GitHub e' allo stesso commit dell'ultima volta non si scarica niente."""
     resta = lambda: max(0.5, scadenza - time.time())
     segno = os.path.join(d, '.ultimo_commit')
-    sha = json.loads(_leggi(API, min(4.0, resta())).decode('utf-8'))['sha']
     try:
-        if open(segno).read().strip() == sha:
-            return 'gia\' aggiornate (stesso commit)'
-    except Exception:
-        pass
-    base = RAW + '/' + sha
+        sha = json.loads(_leggi(API, min(4.0, resta())).decode('utf-8'))['sha']
+    except Exception as e:
+        # ⛔ GitHub limita l'API (403 "rate limit exceeded", 60 richieste/ora per IP): NON ci si
+        #    arrende, si confronta col manifest di main (le impronte decidono cosa scaricare)
+        print('[000] commit non letto (%s): uso main' % e)
+        sha = None
+    if sha:
+        try:
+            if open(segno).read().strip() == sha:
+                return 'gia\' aggiornate (stesso commit)'
+        except Exception:
+            pass
+    base = RAW + '/' + (sha or 'main')
     man = json.loads(_leggi(base + '/manifest.json', resta()).decode('utf-8'))
     elenco = [n for n in man.get('patches') or [] if str(n).endswith('.py')]
     impronte = man.get('hash') or {}
@@ -96,7 +103,7 @@ def aggiorna_prima_di_caricare(d, verifica, scadenza):
                     os.remove(os.path.join(d, x))
                 except Exception:
                     pass
-    if not errori and len(fatte) == len(da_fare):
+    if sha and not errori and len(fatte) == len(da_fare):
         try:
             open(segno, 'w').write(sha)
         except Exception:
