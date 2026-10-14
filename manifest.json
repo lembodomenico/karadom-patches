@@ -1,5 +1,6 @@
 {
   "patches": [
+    "001_patch_una_volta_sola.py",
     "002_patch_arrivano_subito.py",
     "003_trial_orologio_e_trova_file.py",
     "007_vedi_le_patch.py",
@@ -146,9 +147,11 @@
     "215_avvio_meno_chiamate.py",
     "216_licenza_avvio_senza_attesa.py",
     "217_finestra_non_si_ferma.py",
-    "218_forza_aggiorna_patch.py"
+    "218_forza_aggiorna_patch.py",
+    "219_patch_entrano_subito.py"
   ],
   "hash": {
+    "001_patch_una_volta_sola.py": "3203b051b3d79147",
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
     "003_trial_orologio_e_trova_file.py": "b7aeae7df96b2dcb",
     "007_vedi_le_patch.py": "34464e68dd4710fe",
@@ -276,7 +279,7 @@
     "195_scala_finestra_mai_zero.py": "cb1a01f94b991d22",
     "196_avvio_senza_attesa.py": "467f66cdce8c3175",
     "197_sincronizza_su_e_giu.py": "dfde35f3e701c077",
-    "198_percorsi_relativi.py": "61f1213247258b1b",
+    "198_percorsi_relativi.py": "938d2252d1e4413a",
     "199_tonalita_resta_aggiungendo.py": "2e524855f41971ae",
     "200_cantante_nuovo_nel_giro.py": "8b4925b4d09efc93",
     "201_strumento_mixer_resta.py": "aed48a0c8b8a6a10",
@@ -295,6 +298,7 @@
     "215_avvio_meno_chiamate.py": "588927e6c11d7fe5",
     "216_licenza_avvio_senza_attesa.py": "685ee06b9de50bb2",
     "217_finestra_non_si_ferma.py": "36fe90433b5d0196",
-    "218_forza_aggiorna_patch.py": "0694523c12d1ced0"
+    "218_forza_aggiorna_patch.py": "0694523c12d1ced0",
+    "219_patch_entrano_subito.py": "82e66c5b8a35d84c"
   }
 }
