@@ -5,7 +5,7 @@ import os
 import threading
 import time
 
-_VER = 1
+_VER = 2
 CONTROLLO_MIN = 20          # ogni quanto si cercano patch nuove con KaraDom aperto
 FERMO_SEC = 180             # da quanto non deve suonare niente prima di mostrare l'avviso
 AVVIO_SEC = 240             # nei primi minuti (prima di suonare) l'avviso esce subito
@@ -99,15 +99,17 @@ def _riavvia():
         pass
     exe = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ''
     try:
-        if exe.lower().endswith('.exe') and os.path.exists(exe):
-            os.execv(exe, [exe] + sys.argv[1:])
-        elif sys.executable and not sys.executable.lower().endswith('python.exe'):
-            os.execv(sys.executable, [sys.executable] + sys.argv[1:])
+        import subprocess
+        if exe.lower().endswith('.exe') and os.path.exists(exe) and 'python' not in os.path.basename(exe).lower():
+            riga = ' '.join('"%s"' % x for x in [exe] + sys.argv[1:])
         else:
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            riga = ' '.join('"%s"' % x for x in [sys.executable] + sys.argv)
+        # si riapre fra ~2 s, a KaraDom chiuso (singola istanza); STRINGA, non lista (virgolette)
+        subprocess.Popen('cmd /c ping -n 3 127.0.0.1 >nul & start "" ' + riga,
+                         creationflags=0x08000000, close_fds=True)
     except Exception as e:
         print('[219] riavvio non riuscito: %s' % e)
-        os._exit(0)
+    os._exit(0)
 
 
 def _avviso(quante):

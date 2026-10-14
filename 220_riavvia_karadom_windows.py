@@ -3,7 +3,7 @@
 import os
 import sys
 
-_VER = 2
+_VER = 3
 
 
 def _spenta():
@@ -39,7 +39,10 @@ def apply():
     #    un'altra patch, e "class X(funzione)" dava "function() argument 'code' must be code"
     def Popen(args, *a, **k):
         try:
-            if isinstance(args, (list, tuple)) and args and str(args[0]) == sys.executable \
+            if isinstance(args, (list, tuple)) and len(args) == 3 and str(args[0]).lower() == 'cmd' \
+                    and str(args[1]).lower() == '/c' and 'start ""' in str(args[2]):
+                args = 'cmd /c ' + str(args[2])          # riavvio del KaraDom ricompilato: stessa cura
+            elif isinstance(args, (list, tuple)) and args and str(args[0]) == sys.executable \
                     and not os.path.exists(sys.executable):
                 exe = _exe_vero()
                 if exe:
@@ -48,8 +51,10 @@ def apply():
                         resto = resto[1:]
                     riga = ' '.join('"%s"' % x for x in [exe] + resto)
                     # si riapre DOPO un paio di secondi, quando questo KaraDom e' chiuso:
-                    # altrimenti il nuovo trova il vecchio ancora aperto e si ferma
-                    args = ['cmd', '/c', 'ping -n 3 127.0.0.1 >nul & start "" ' + riga]
+                    # altrimenti il nuovo trova il vecchio ancora aperto e si ferma.
+                    # ⛔ STRINGA, non lista: con la lista Python mette \" davanti alle virgolette,
+                    #    cmd non le capisce e Windows dice "Impossibile trovare '\'"
+                    args = 'cmd /c ping -n 3 127.0.0.1 >nul & start "" ' + riga
                     k.setdefault('creationflags', 0x08000000)       # senza finestra nera
                     k['close_fds'] = True
                     print('[220] riavvio: %s' % exe)
