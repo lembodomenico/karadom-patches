@@ -3,7 +3,7 @@
 import os
 import sys
 
-_VER = 1
+_VER = 2
 
 
 def _spenta():
@@ -35,26 +35,27 @@ def apply():
         return True
     Vero = getattr(subprocess.Popen, '_kd220_orig', None) or subprocess.Popen
 
-    class Popen(Vero):
-        def __init__(self, args, *a, **k):
-            try:
-                if isinstance(args, (list, tuple)) and args and str(args[0]) == sys.executable \
-                        and not os.path.exists(sys.executable):
-                    exe = _exe_vero()
-                    if exe:
-                        resto = [str(x) for x in args[1:]]
-                        if resto and os.path.abspath(resto[0]) == exe:
-                            resto = resto[1:]
-                        riga = ' '.join('"%s"' % x for x in [exe] + resto)
-                        # si riapre DOPO un paio di secondi, quando questo KaraDom e' chiuso:
-                        # altrimenti il nuovo trova il vecchio ancora aperto e si ferma
-                        args = ['cmd', '/c', 'ping -n 3 127.0.0.1 >nul & start "" ' + riga]
-                        k.setdefault('creationflags', 0x08000000)       # senza finestra nera
-                        k['close_fds'] = True
-                        print('[220] riavvio: %s' % exe)
-            except Exception as e:
-                print('[220] %s' % e)
-            super().__init__(args, *a, **k)
+    # ⛔ niente sottoclasse: su alcuni PC subprocess.Popen e' gia' una FUNZIONE messa da
+    #    un'altra patch, e "class X(funzione)" dava "function() argument 'code' must be code"
+    def Popen(args, *a, **k):
+        try:
+            if isinstance(args, (list, tuple)) and args and str(args[0]) == sys.executable \
+                    and not os.path.exists(sys.executable):
+                exe = _exe_vero()
+                if exe:
+                    resto = [str(x) for x in args[1:]]
+                    if resto and os.path.abspath(resto[0]) == exe:
+                        resto = resto[1:]
+                    riga = ' '.join('"%s"' % x for x in [exe] + resto)
+                    # si riapre DOPO un paio di secondi, quando questo KaraDom e' chiuso:
+                    # altrimenti il nuovo trova il vecchio ancora aperto e si ferma
+                    args = ['cmd', '/c', 'ping -n 3 127.0.0.1 >nul & start "" ' + riga]
+                    k.setdefault('creationflags', 0x08000000)       # senza finestra nera
+                    k['close_fds'] = True
+                    print('[220] riavvio: %s' % exe)
+        except Exception as e:
+            print('[220] %s' % e)
+        return Vero(args, *a, **k)
 
     Popen._kd220 = _VER
     Popen._kd220_orig = Vero
