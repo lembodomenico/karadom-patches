@@ -1,6 +1,5 @@
 {
   "patches": [
-    "000_patch_aggiornate_prima.py",
     "002_patch_arrivano_subito.py",
     "003_trial_orologio_e_trova_file.py",
     "007_vedi_le_patch.py",
@@ -123,7 +122,6 @@
     "182_nomi_strumenti_brandizzati.py",
     "186_spia_scatti.py",
     "190_overlay_immagine_veloce.py",
-    "191_karadom_dj.py",
     "192_stop_video_sicuro.py",
     "194_youtube_server_multiplo.py",
     "195_scala_finestra_mai_zero.py",
@@ -148,12 +146,9 @@
     "215_avvio_meno_chiamate.py",
     "216_licenza_avvio_senza_attesa.py",
     "217_finestra_non_si_ferma.py",
-    "218_forza_aggiorna_patch.py",
-    "219_patch_entrano_subito.py",
-    "220_riavvia_karadom_windows.py"
+    "218_forza_aggiorna_patch.py"
   ],
   "hash": {
-    "000_patch_aggiornate_prima.py": "fcf396a04334764e",
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
     "003_trial_orologio_e_trova_file.py": "b7aeae7df96b2dcb",
     "007_vedi_le_patch.py": "34464e68dd4710fe",
@@ -276,13 +271,12 @@
     "182_nomi_strumenti_brandizzati.py": "365a295024ed5a11",
     "186_spia_scatti.py": "d04c5ff219b0b6f9",
     "190_overlay_immagine_veloce.py": "0ba722239d9fb15f",
-    "191_karadom_dj.py": "92e7faef32475041",
     "192_stop_video_sicuro.py": "d463347edc1d1986",
     "194_youtube_server_multiplo.py": "ff3726e465ed8526",
     "195_scala_finestra_mai_zero.py": "cb1a01f94b991d22",
     "196_avvio_senza_attesa.py": "467f66cdce8c3175",
     "197_sincronizza_su_e_giu.py": "dfde35f3e701c077",
-    "198_percorsi_relativi.py": "938d2252d1e4413a",
+    "198_percorsi_relativi.py": "59306c601b7023f8",
     "199_tonalita_resta_aggiungendo.py": "2e524855f41971ae",
     "200_cantante_nuovo_nel_giro.py": "8b4925b4d09efc93",
     "201_strumento_mixer_resta.py": "aed48a0c8b8a6a10",
@@ -301,8 +295,6 @@
     "215_avvio_meno_chiamate.py": "588927e6c11d7fe5",
     "216_licenza_avvio_senza_attesa.py": "685ee06b9de50bb2",
     "217_finestra_non_si_ferma.py": "36fe90433b5d0196",
-    "218_forza_aggiorna_patch.py": "53657c95bbf719a2",
-    "219_patch_entrano_subito.py": "6ee42d41152d7750",
-    "220_riavvia_karadom_windows.py": "a6645ced47b14035"
+    "218_forza_aggiorna_patch.py": "0694523c12d1ced0"
   }
 }

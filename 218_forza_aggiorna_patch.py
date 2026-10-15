@@ -1,8 +1,8 @@
 # 218 - menu Extra: "Forza aggiornamento patch"
 
-_VER = 3
+_VER = 1
 
-# [14-10-2026] su tutti i PC (prima solo sul portatile KaraDom OS)
+# [11-10-2026] per ora SOLO sul portatile KaraDom OS (ThinkPad L15)
 SOLO_SERIALI = ('4D8E-F63F-45E1-8F06', '1E49-898D-7E7D-E899')   # disco interno, chiavetta 64 GB
 
 
@@ -23,60 +23,45 @@ def _spenta():
         return False
 
 
-def _leggi(url, timeout=20):
-    import urllib.request
-    req = urllib.request.Request(url, headers={'User-Agent': 'KaraDom Pro Updater',
-                                               'Cache-Control': 'no-cache', 'Pragma': 'no-cache'})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
-
-
 def forza_patch():
     """Riscarica TUTTE le patch pubblicate, senza fidarsi di impronte o cache.
-    ⛔ Non usa pezzi interni di moduli.updater: sui KaraDom installati non sempre ci sono
-    ("module 'moduli.updater' has no attribute '_patch_base_fatta'").
     Ritorna (aggiornate, nuove, errori)."""
     import os
     import json
-    try:
-        from moduli.hotfix import patches_dir, _verify
-    except Exception:
-        from hotfix import patches_dir, _verify
-    raw = "https://raw.githubusercontent.com/lembodomenico/karadom-patches"
-    try:                        # l'ultimo commit esatto: niente copie vecchie dalla cache di GitHub
-        sha = json.loads(_leggi("https://api.github.com/repos/lembodomenico/karadom-patches/commits/main"
-                                ).decode('utf-8'))['sha']
-        base = raw + "/" + sha
-    except Exception:
-        base = raw + "/main"
+    import urllib.request
+    from moduli import updater
+    from moduli.hotfix import patches_dir, _verify
+    updater._patch_base_fatta[0] = None
     d = patches_dir()
-    manifest = json.loads(_leggi(base + "/manifest.json").decode('utf-8'))
+    base = updater._base_patches()
+    req = urllib.request.Request(base + "/manifest.json",
+                                 headers={'User-Agent': 'KaraDom Pro Updater',
+                                          'Cache-Control': 'no-cache', 'Pragma': 'no-cache'})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        manifest = json.loads(resp.read().decode('utf-8'))
     elenco = [str(n) for n in (manifest.get("patches") or []) if str(n).endswith(".py")]
     aggiornate, nuove, errori = [], [], []
     for nome in elenco:
         try:
-            dest = os.path.join(d, nome)
-            if os.path.exists(dest + ".prova") or os.path.exists(os.path.join('/opt/karadom-os/patches_os', nome)):
-                continue        # prova locale / patch bloccata di KaraDom OS: non si tocca
-            py = _leggi(base + "/" + nome)
-            sig = _leggi(base + "/" + nome + ".sig")
+            py = updater._scarica(base + "/" + nome)
+            sig = updater._scarica(base + "/" + nome + ".sig")
+            if py is None or sig is None:
+                errori.append(nome)
+                continue
             if not _verify(py, sig):
                 errori.append(nome + " (firma)")
                 continue
+            dest = os.path.join(d, nome)
+            if os.path.exists(dest[:-3] + ".py.prova") or os.path.exists(dest + ".prova"):
+                continue        # prova locale / patch bloccata di KaraDom OS: non si tocca
             c_era = os.path.exists(dest)
-            if c_era and open(dest, "rb").read() == py and open(dest + ".sig", "rb").read() == sig:
+            if c_era and open(dest, "rb").read() == py and os.path.exists(dest + ".sig"):
                 continue
-            for f, dati in ((dest + ".sig", sig), (dest, py)):
-                with open(f + ".tmp218", "wb") as fh:
-                    fh.write(dati)
-                os.replace(f + ".tmp218", f)
+            open(dest, "wb").write(py)
+            open(dest + ".sig", "wb").write(sig)
             (aggiornate if c_era else nuove).append(nome)
         except Exception as e:
             errori.append("%s (%s)" % (nome, e))
-    try:
-        os.remove(os.path.join(d, '.ultimo_commit'))   # la 000 ricontrolla tutto al prossimo avvio
-    except Exception:
-        pass
     print("🩹 forza patch: %d aggiornate, %d nuove, %d errori su %d"
           % (len(aggiornate), len(nuove), len(errori), len(elenco)))
     return aggiornate, nuove, errori
@@ -87,14 +72,11 @@ def _riavvia_karadom(root):
     import sys
     import subprocess
     if os.name == 'nt':
-        exe = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ''
-        if exe.lower().endswith('.exe') and os.path.exists(exe) and 'python' not in os.path.basename(exe).lower():
-            riga = ' '.join('"%s"' % x for x in [exe] + sys.argv[1:])
+        exe = sys.executable
+        if getattr(sys, 'frozen', False) or '__compiled__' in globals() or 'python' not in os.path.basename(exe).lower():
+            subprocess.Popen([exe] + sys.argv[1:], close_fds=True)
         else:
-            riga = ' '.join('"%s"' % x for x in [sys.executable] + sys.argv)
-        # fra ~2 s, a KaraDom chiuso; ⛔ STRINGA, non lista (virgolette rovinate -> "Impossibile trovare '\'")
-        subprocess.Popen('cmd /c ping -n 3 127.0.0.1 >nul & start "" ' + riga,
-                         creationflags=0x08000000, close_fds=True)
+            subprocess.Popen([exe] + sys.argv, close_fds=True)
     else:
         avvio = '/root/avvia_karadom.sh'
         if os.path.exists(avvio):
@@ -150,13 +132,12 @@ def apri(root):
 
 
 def apply():
-    if _spenta():
+    if _spenta() or not _pc_giusto():
         return False
     try:
         from moduli import updater
         if hasattr(updater, 'apri_forza_patch'):
-            updater.apri_forza_patch = apri     # KaraDom ricompilato: voce nel menu, lavoro fatto qui
-            return True
+            return False        # KaraDom ricompilato: la voce c'e' gia' nel menu
     except Exception:
         pass
     import tkinter as tk
