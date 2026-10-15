@@ -149,7 +149,8 @@
     "217_finestra_non_si_ferma.py",
     "218_forza_aggiorna_patch.py",
     "221_mixer_usb_senza_powershell.py",
-    "222_spia_cpu_pc.py"
+    "222_spia_cpu_pc.py",
+    "223_preferiti_grandi_non_si_rileggono.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -301,6 +302,7 @@
     "217_finestra_non_si_ferma.py": "36fe90433b5d0196",
     "218_forza_aggiorna_patch.py": "0694523c12d1ced0",
     "221_mixer_usb_senza_powershell.py": "f09d28814b686e18",
-    "222_spia_cpu_pc.py": "df78a819d37082f6"
+    "222_spia_cpu_pc.py": "df78a819d37082f6",
+    "223_preferiti_grandi_non_si_rileggono.py": "48ef9310ada2ae8e"
   }
 }
