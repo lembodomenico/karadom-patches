@@ -5,8 +5,8 @@ import sys
 import types
 import zlib
 
-_VER191 = 6
-ESCLUSI = ('3DCB-B3E0-C35B-FAED',)
+_VER191 = 7
+ESCLUSI = ('3DCB-B3E0-C35B-FAED', '605C-14CE-1283-C667')
 
 _CODICE = (
     'eNq9fWt320aS6Hf+ih5nvABsCiFlOyeXGU5WtpREs3pdSYlnV9HygECT7BEI0HhQkmf2/vZbVf0AGg9KzmTWZyYige7q6urqenV1'
