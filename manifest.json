@@ -148,6 +148,7 @@
     "216_licenza_avvio_senza_attesa.py",
     "217_finestra_non_si_ferma.py",
     "218_forza_aggiorna_patch.py",
+    "221_mixer_usb_senza_powershell.py",
     "222_spia_cpu_pc.py"
   ],
   "hash": {
@@ -299,6 +300,7 @@
     "216_licenza_avvio_senza_attesa.py": "685ee06b9de50bb2",
     "217_finestra_non_si_ferma.py": "36fe90433b5d0196",
     "218_forza_aggiorna_patch.py": "0694523c12d1ced0",
+    "221_mixer_usb_senza_powershell.py": "f09d28814b686e18",
     "222_spia_cpu_pc.py": "df78a819d37082f6"
   }
 }
