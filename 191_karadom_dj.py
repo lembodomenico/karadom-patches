@@ -5,7 +5,8 @@ import sys
 import types
 import zlib
 
-_VER191 = 5
+_VER191 = 6
+ESCLUSI = ('3DCB-B3E0-C35B-FAED',)
 
 _CODICE = (
     'eNq9fWt320aS6Hf+ih5nvABsCiFlOyeXGU5WtpREs3pdSYlnV9HygECT7BEI0HhQkmf2/vZbVf0AGg9KzmTWZyYige7q6urqenV1'
@@ -164,8 +165,51 @@ def _modulo():
     return m
 
 
+def _escluso():
+    try:
+        from moduli.licensing import get_hardware_id, generate_serial
+        c, m = get_hardware_id()
+        return generate_serial(c, m) in ESCLUSI
+    except Exception:
+        return False
+
+
+def _senza_dj():
+    try:
+        import zipfile
+        from moduli import dep_sync as S
+    except Exception:
+        return
+
+    def _completa_mancanti_ora(dest_dir=None, url=None, timeout=S.TIMEOUT, log=print):
+        dest = dest_dir or S._dest_dir()
+        indirizzo = url or S.DEP_ZIP_URL
+        try:
+            zf = zipfile.ZipFile(S._HttpRangeFile(indirizzo, timeout))
+        except Exception as e:
+            log("[dipendenze] zip non raggiungibile: %s" % e)
+            return -1, 0
+        manca = [i for i in zf.infolist() if not i.is_dir()
+                 and not i.filename.replace(chr(92), '/').startswith(('karadom_dj/', 'karadom_remix/'))
+                 and not os.path.exists(os.path.join(dest, i.filename.replace("/", os.sep)))]
+        presi = byte = 0
+        for info in manca:
+            try:
+                S._write_atomic(os.path.join(dest, info.filename.replace("/", os.sep)),
+                                S._fetch_member(indirizzo, info, timeout))
+                presi += 1
+                byte += info.file_size
+            except Exception as e:
+                log("[dipendenze] %s non scaricato: %s" % (info.filename, e))
+        return presi, byte
+    S._completa_mancanti_ora = _completa_mancanti_ora
+
+
 def apply():
     if _spenta() or os.name != 'nt':      # KaraDom OS (Linux): KaraDom DJ non c'e', resta il DJ-set
+        return False
+    if _escluso():
+        _senza_dj()
         return False
     try:
         import moduli.djset as D
