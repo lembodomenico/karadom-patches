@@ -2,7 +2,7 @@
 
 import os
 
-_VER = 3
+_VER = 4
 
 
 def _spenta():
@@ -72,7 +72,81 @@ def _una_volta(delta):
     return _delta_preferito
 
 
+def _mtime(self, chiave):
+    try:
+        f = self._file_cache_brani(chiave)
+        return os.path.getmtime(f) if f and os.path.exists(f) else 0.0
+    except Exception:
+        return 0.0
+
+
+def _dal_padre(self, cartella):
+    """Sottocartella di un elenco gia' in memoria: si ricava da quello, senza disco."""
+    cache = getattr(self, '_cache_brani', None)
+    if not cache:
+        return False
+    chiave = os.path.normpath(str(cartella)).lower()
+    if chiave in cache:
+        return False
+    padre = None
+    for k in list(cache):
+        if chiave.startswith(k.rstrip('\\/') + os.sep) and (padre is None or len(k) > len(padre)):
+            padre = k
+    if padre is None:
+        return False
+    if _mtime(self, chiave) > _mtime(self, padre):
+        return False          # elenco della sottocartella piu' nuovo (aggiornato a mano): vale quello
+    try:
+        _completi, voci, indice = cache[padre]
+    except Exception:
+        return False
+    import threading
+    pref = chiave + os.sep
+
+    def lavora():
+        import time as _t
+        sub, sub_idx = [], {}
+        for n, v in enumerate(voci):
+            if n % 5000 == 0 and n:
+                _t.sleep(0.002)
+            try:
+                p = v['path']
+            except Exception:
+                continue
+            if os.path.normpath(p).lower().startswith(pref):
+                sub.append(v)
+                if p in indice:
+                    sub_idx[p] = indice[p]
+        if not sub:
+            def _normale():
+                carica_vera(self, cartella)
+            self.parent.after(0, _normale)
+            return
+        completi = [v['path'] for v in sub]
+
+        def _assegna():
+            cache[chiave] = (completi, sub, sub_idx)
+            if os.path.normpath(str(getattr(self, 'percorso_attivo', '') or '')).lower() != chiave:
+                return
+            self.brani_completi, self.brani_pc, self.indice_preferiti = completi, sub, sub_idx
+            self._caricato223 = (_chiave(cartella), sub)
+            print("✅ %d brani (dalla memoria del preferito)" % len(sub))
+        self.parent.after(0, _assegna)
+
+    self.percorso_attivo = cartella
+    try:
+        self._aggancia_caricamento_016()
+    except Exception:
+        pass
+    threading.Thread(target=lavora, daemon=True, name='padre223').start()
+    return True
+
+
+carica_vera = None
+
+
 def apply():
+    global carica_vera
     if _spenta():
         return False
     try:
@@ -92,6 +166,12 @@ def apply():
         gia = getattr(self, '_caricato223', None)
         if not forza and gia and gia[0] == ch and gia[1] is getattr(self, 'brani_pc', None) and _tanti(self):
             return None
+        if not forza and _libreria_grande(self):
+            try:
+                if _dal_padre(self, cartella):
+                    return None
+            except Exception as e:
+                print('[223] dal preferito: %s' % e)
         r = carica(self, cartella, forza, *a, **k)
         try:
             lista = getattr(self, 'brani_pc', None)
@@ -101,6 +181,7 @@ def apply():
         return r
 
     C.carica_brani = carica_brani
+    carica_vera = carica
 
     delta = getattr(C, '_delta_preferito', None)
     if delta is not None and not getattr(delta, '_da223', False):
