@@ -2,7 +2,7 @@
 
 import os
 
-_VER = 2
+_VER = 3
 
 
 def _spenta():
@@ -35,8 +35,16 @@ def _tanti(self):
         return False
 
 
+def _segno():
+    return os.path.join(os.environ.get('LOCALAPPDATA') or os.path.expanduser('~'),
+                        'KaraDom', 'elenchi', 'libreria_grande_223')
+
+
 def _libreria_grande(self):
     if getattr(self, '_grande223', False):
+        return True
+    if os.path.exists(_segno()):
+        self._grande223 = True
         return True
     try:
         n = max(len(getattr(self, 'brani_pc', None) or []),
@@ -47,17 +55,18 @@ def _libreria_grande(self):
         n = 0
     if n > _soglia():
         self._grande223 = True
+        try:
+            os.makedirs(os.path.dirname(_segno()), exist_ok=True)
+            open(_segno(), 'w').write(str(n))
+        except Exception:
+            pass
     return getattr(self, '_grande223', False)
 
 
 def _una_volta(delta):
     def _delta_preferito(self, cartella, *a, **k):
         if _libreria_grande(self):
-            fatti = self.__dict__.setdefault('_delta223', set())
-            ch = _chiave(cartella)
-            if ch in fatti:
-                return None
-            fatti.add(ch)
+            return None
         return delta(self, cartella, *a, **k)
     _delta_preferito._da223 = True
     return _delta_preferito
