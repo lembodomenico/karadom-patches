@@ -5,8 +5,8 @@ import sys
 import threading
 import time
 
-_VER = 1
-SOLO_SERIALI = ('3DCB-B3E0-C35B-FAED', '605C-14CE-1283-C667')
+_VER = 2
+SOLO_SERIALI = ('3DCB-B3E0-C35B-FAED', '605C-14CE-1283-C667', '1A55-2CD1-3303-20EB')
 OGNI = 10.0
 
 
