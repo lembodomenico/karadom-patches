@@ -151,7 +151,8 @@
     "221_mixer_usb_senza_powershell.py",
     "222_spia_cpu_pc.py",
     "223_preferiti_grandi_non_si_rileggono.py",
-    "224_filtro_pronto_con_tabella.py"
+    "224_filtro_pronto_con_tabella.py",
+    "225_midi_senza_parole_suona.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -305,6 +306,7 @@
     "221_mixer_usb_senza_powershell.py": "f09d28814b686e18",
     "222_spia_cpu_pc.py": "89f557ddccc376b6",
     "223_preferiti_grandi_non_si_rileggono.py": "9d12534326def0b8",
-    "224_filtro_pronto_con_tabella.py": "549ea32f100cad9f"
+    "224_filtro_pronto_con_tabella.py": "549ea32f100cad9f",
+    "225_midi_senza_parole_suona.py": "aa5201dac6be21f8"
   }
 }
