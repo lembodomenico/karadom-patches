@@ -66,6 +66,36 @@ def _descrizione(percorso):
     return ""
 
 
+def _avvio_programma():
+    """Quando e' partito questo KaraDom (secondi epoch); None se non si sa."""
+    try:
+        import psutil
+        return psutil.Process(os.getpid()).create_time()
+    except Exception:
+        pass
+    try:                                            # Linux senza psutil: /proc
+        tick = os.sysconf("SC_CLK_TCK")
+        partenza = int(open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19]) / tick
+        boot = [float(r.split()[1]) for r in open("/proc/stat") if r.startswith("btime")][0]
+        return boot + partenza
+    except Exception:
+        return None
+
+
+def _arrivata_dopo_avvio(percorso):
+    """[18-10-2026] Utente: "la patch non deve essere mai scartata, perche' succede?". Una patch arrivata
+    DOPO l'apertura di KaraDom (scaricata dalla guardia ogni 20 min, o copiata) non puo' essere ancora
+    applicata: le patch si applicano all'avvio. La finestra la dava per "scartata"; e' solo in attesa."""
+    avvio = _avvio_programma()
+    if avvio is None:
+        return False
+    try:
+        s = os.stat(percorso)
+        return max(s.st_mtime, s.st_ctime) > avvio + 2
+    except Exception:
+        return False
+
+
 def _stato(nome, percorso):
     """(stato, spiegazione) di una patch che sta nella cartella.
 
@@ -92,6 +122,8 @@ def _stato(nome, percorso):
         if APPLICATE:                      # se e' vuoto non dice niente di utile
             if nome in APPLICATE:
                 return "attiva", ""
+            if _arrivata_dopo_avvio(percorso):
+                return "al riavvio", "nuova: arrivata dopo l'apertura, si attiva al prossimo riavvio di KaraDom"
             return "scartata", "il programma non l'ha applicata"
     except Exception:
         pass
@@ -157,7 +189,7 @@ def _finestra(parent=None):
         testo = _descrizione(p) if stato == "attiva" else (perche or _descrizione(p))
         t.insert("", "end", values=(stato, nome, quando, testo),
                  tags=("ok" if stato == "attiva"
-                       else ("forse" if stato == "arrivata" else "no"),))
+                       else ("forse" if stato in ("arrivata", "al riavvio") else "no"),))
         attive += 1 if stato in ("attiva", "arrivata") else 0
 
     if not file:

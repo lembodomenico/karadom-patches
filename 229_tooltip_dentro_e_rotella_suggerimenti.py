@@ -1,6 +1,6 @@
 # 229 - tooltip dentro la finestra e rotella sulla lista suggerimenti
 
-_VER = 1
+_VER = 2
 
 
 def _spenta():
@@ -46,7 +46,9 @@ def _tooltip():
 
 
 def _rotella(self):
-    if getattr(self, '_rotella_suggerimenti_ok', False):
+    # v2: bindtag in testa a ogni elemento della finestra (Linux: la rotella va all'elemento sotto il mouse e
+    # scaletta/preferiti/liste la consumano prima della finestra); si rimette a ogni apertura della lista
+    if getattr(self, '_rotella_suggerimenti_ok', False) == 2:
         return
 
     def rotella(event):
@@ -62,9 +64,25 @@ def _rotella(self):
             return 'break'
         except Exception:
             return None
+    tag = 'KDRotellaSuggerimenti'
     for ev in ('<MouseWheel>', '<Button-4>', '<Button-5>'):
-        self.parent.winfo_toplevel().bind(ev, rotella, add='+')
-    self._rotella_suggerimenti_ok = True
+        self.parent.bind_class(tag, ev, rotella)
+
+    def metti_tag(_e=None):
+        da_fare = [self.parent.winfo_toplevel()]
+        while da_fare:
+            w = da_fare.pop()
+            try:
+                if w is not self.listbox_suggerimenti:
+                    t = w.bindtags()
+                    if tag not in t:
+                        w.bindtags((tag,) + t)
+                da_fare.extend(w.winfo_children())
+            except Exception:
+                pass
+    self.container_suggerimenti.bind('<Map>', metti_tag, add='+')
+    metti_tag()
+    self._rotella_suggerimenti_ok = 2
 
 
 def apply():

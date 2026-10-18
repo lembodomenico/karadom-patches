@@ -158,7 +158,7 @@
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
     "003_trial_orologio_e_trova_file.py": "b7aeae7df96b2dcb",
-    "007_vedi_le_patch.py": "34464e68dd4710fe",
+    "007_vedi_le_patch.py": "fbecebdc10646c2a",
     "009_preferiti_si_indicizza_una_volta.py": "39b1bd173c4a51a2",
     "010_tasto_destro_rilegge_il_disco.py": "2890c36af2452cda",
     "012_barre_blu_notte.py": "04a9cf0a1895b2c2",
@@ -309,6 +309,6 @@
     "223_preferiti_grandi_non_si_rileggono.py": "9d12534326def0b8",
     "224_filtro_pronto_con_tabella.py": "549ea32f100cad9f",
     "225_midi_senza_parole_suona.py": "aa5201dac6be21f8",
-    "229_tooltip_dentro_e_rotella_suggerimenti.py": "483464d018cf1ef4"
+    "229_tooltip_dentro_e_rotella_suggerimenti.py": "42ae0cf8055ad247"
   }
 }
