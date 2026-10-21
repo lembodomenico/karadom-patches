@@ -49,10 +49,16 @@ def _segna_inserito(pid, da_dove):
 
 import re as _re160
 
-_VER160 = 7
+_VER160 = 10
 
 _MODIFICHE160 = {}
-_INSERITE160 = set()
+# [21-10-2026] id -> ora dell'inserimento. Il sito RIUSA la stessa riga (stesso ID) quando un cantante
+# gia' in scaletta prenota di nuovo, anche lo STESSO brano (utente: "il cantante potrebbe cambiare
+# idea"): la riga inserita si nasconde SOLO nei secondi in cui il server non l'ha ancora segnata
+# inserita; dopo, se il server la rimanda e' una prenotazione NUOVA e compare sempre.
+import time
+_INSERITE160 = {}
+_NASCONDI_SEC160 = 20
 
 
 def _originale160(obj, flag, attr, var):
@@ -373,7 +379,7 @@ def apply():
                     self._rr_map = {}
                     for r in rows:
                         _id = r.get('ID')
-                        if str(_id) in _INSERITE160:
+                        if time.time() - _INSERITE160.get(str(_id), 0) < _NASCONDI_SEC160:
                             continue
                         cant = str(r.get('CANTANTE') or '').upper()
                         tit = str(r.get('BRANO') or '').strip(); art = str(r.get('ARTISTA') or '').strip()
@@ -390,6 +396,8 @@ def apply():
                         iid = self._rr_tree.insert("", "end", values=valori)
                         self._rr_map[_id] = iid
                     _titolo_aggiorna(self)
+                    if not self._rr_tree.get_children():
+                        _ferma_lampeggio()
                     if chiudi_se_vuoto and len(rows) == 0:
                         _hide(self); _rrlog("nessuna richiesta -> chiudo")
                 except Exception as e:
@@ -547,11 +555,36 @@ def apply():
         except Exception as e:
             _rrlog("svuota campi err: %s" % e)
 
+    def _ferma_lampeggio():
+        """[21-10-2026] utente: "quando premo Aggiungi gia' deve fermarsi se non ci sono altri brani".
+        Il bottone PRE lampeggia finche' il controllo ogni 30 s non trova 0 richieste: qui si ferma
+        SUBITO. stop_remote_blink (ui.py) sta nella chiusura del comando del bottone PRE."""
+        try:
+            root = getattr(tk, '_default_root', None)
+            if root is None:
+                return
+            pila = [root]
+            while pila:
+                w = pila.pop()
+                try:
+                    pila.extend(w.winfo_children())
+                except Exception:
+                    continue
+                if getattr(w, '_text', None) == 'PRE' and callable(getattr(w, '_command', None)):
+                    for cella in (w._command.__closure__ or ()):
+                        f = cella.cell_contents
+                        if callable(f) and getattr(f, '__name__', '') == 'stop_remote_blink':
+                            f(); _rrlog("nessuna richiesta in attesa -> PRE smette di lampeggiare")
+                            return
+        except Exception as e:
+            _rrlog("ferma lampeggio err: %s" % e)
+
     def _dopo_inserita(self):
         try:
             if not getattr(self, '_rr_dock_done', False):
                 return
             if not self._rr_tree.get_children():
+                _ferma_lampeggio()
                 _hide(self); _rrlog("ultima richiesta inserita -> chiudo")
             elif getattr(self, '_rr_visible', False):
                 self._rr_frame.lift(); _rrlog("richiesta inserita, altre in attesa -> resta aperto")
@@ -599,7 +632,7 @@ def apply():
                     pid = None
                 if pid is not None and not da_pl:
                     _segna_inserito(pid, "")
-                    _INSERITE160.add(str(pid))
+                    _INSERITE160[str(pid)] = time.time()
                     _togli_riga(self, pid)
                     self._rr_pending_id = None
                     _dopo_inserita(self)
@@ -647,7 +680,7 @@ def apply():
                     pid = None
                 if pid is not None:
                     _segna_inserito(pid, "+ playlist ")
-                    _INSERITE160.add(str(pid))
+                    _INSERITE160[str(pid)] = time.time()
                     _togli_riga(self, pid)
                     self._rr_pending_id = None
                     richiesta_fatta = True
