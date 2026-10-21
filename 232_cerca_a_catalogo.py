@@ -5,7 +5,7 @@
 # Il catalogo e' quello sul server (brani_memorizzati2 del gestore): catalogo_api.php action 'cerca'
 # (entra solo con una licenza che ha le richieste remote).
 
-_VER = 1
+_VER = 2
 
 
 def _spenta():
@@ -114,21 +114,22 @@ def _apri(parent):
 
         # la risposta arriva in un thread: la si lascia in 'giro' e la finestra la raccoglie
         # dal proprio thread (Tk non va toccato da altri thread)
+        # [v2] risposta per NUMERO di ricerca: prima una risposta vecchia arrivata dopo faceva
+        # smettere di aspettare quella nuova e la finestra restava su "Cerco..."
         def lavora():
             try:
                 from moduli.catalogo_remoto import _chiedi
-                giro['risposta'] = (n, _chiedi('cerca', q=q), None)
+                giro[('r', n)] = (n, _chiedi('cerca', q=q), None)
             except Exception as e:
-                giro['risposta'] = (n, {}, str(e))
+                giro[('r', n)] = (n, {}, str(e))
         threading.Thread(target=lavora, daemon=True).start()
 
-        def raccogli():
-            if not win.winfo_exists():
-                return
-            r = giro.pop('risposta', None)
+        def raccogli(attese=[0]):
+            if not win.winfo_exists() or n != giro['n']:
+                return                               # c'e' gia' una ricerca piu' nuova: ci pensa lei
+            r = giro.pop(('r', n), None)
             if r is None:
-                if n == giro['n']:
-                    win.after(80, raccogli)
+                win.after(80, raccogli)
                 return
             mostra(*r)
         win.after(80, raccogli)
