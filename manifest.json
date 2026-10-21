@@ -154,7 +154,8 @@
     "224_filtro_pronto_con_tabella.py",
     "225_midi_senza_parole_suona.py",
     "229_tooltip_dentro_e_rotella_suggerimenti.py",
-    "232_cerca_a_catalogo.py"
+    "232_cerca_a_catalogo.py",
+    "233_console_xr18.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -311,6 +312,7 @@
     "224_filtro_pronto_con_tabella.py": "549ea32f100cad9f",
     "225_midi_senza_parole_suona.py": "aa5201dac6be21f8",
     "229_tooltip_dentro_e_rotella_suggerimenti.py": "42ae0cf8055ad247",
-    "232_cerca_a_catalogo.py": "25319aa5f61a3413"
+    "232_cerca_a_catalogo.py": "25319aa5f61a3413",
+    "233_console_xr18.py": "966622079eb67609"
   }
 }
