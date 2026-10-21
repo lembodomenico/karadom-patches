@@ -8,7 +8,7 @@
 # [v2] utente: "deve arrivare a tutti i miei pc registrati": arriva a tutti, ma si accende SOLO sui
 # PC con la licenza firmata del titolare (console_xr18.abilitata()); sui clienti non fa niente.
 
-_VER = 5
+_VER = 6
 
 _MODULO = """
 eNq9fdly6sqW4Lu/QpcTpywuGBAzvscnGmPAeAAMxtOuHS4hBMgISZbE5BriPvZbRXRUR0d0dHT0U/1Cdb9W/8n9gf6FXiszNQvs
@@ -260,7 +260,7 @@ def _carica_modulo():
 
 
 def _spegni_voce_guida():
-    """La voce guida in cuffia (la funzione di SYN) spenta e bloccata sui PC del titolare."""
+    """La voce guida in cuffia (la funzione di SYN) spenta e bloccata, per TUTTI."""
     try:
         from moduli.cuffia_guida import guida
         guida.set_enabled(False)
@@ -282,9 +282,10 @@ def apply():
         return True
     try:
         mod = _carica_modulo()
-        if not mod.abilitata():
-            print('[233] console XR18: non e\' un PC del titolare, niente bottone')
-            return True
+        # [v6] utente: "SYN lo togli a tutti": SYN e voce guida via per TUTTI; la console MIX
+        # resta solo sui PC del titolare
+        titolare = mod.abilitata()
+        _spegni_voce_guida()
         import moduli.glow_button as gb
         G = gb.GlowButton
         if getattr(G, '_ver233', None) == _VER:
@@ -298,44 +299,48 @@ def apply():
                 if kw.get('text') != 'SYN' or getattr(self, '_mix233', None) is not None:
                     return
                 rif = []
-                mix = G(self.master, text='MIX',
-                        command=lambda: mod.apri(rif[0].winfo_toplevel(), ancora=rif[0], alterna=True),
-                        width=kw.get('width'), height=kw.get('height'),
-                        corner_radius=kw.get('corner_radius'), font_delta=kw.get('font_delta', -2),
-                        fg_color='#00e5ff', hover_color='#67f0ff', text_color='white',
-                        font=kw.get('font'))
-                self._mix233 = mix
-                rif.append(mix)
+                mix = None
+                if titolare:
+                    mix = G(self.master, text='MIX',
+                            command=lambda: mod.apri(rif[0].winfo_toplevel(), ancora=rif[0], alterna=True),
+                            width=kw.get('width'), height=kw.get('height'),
+                            corner_radius=kw.get('corner_radius'), font_delta=kw.get('font_delta', -2),
+                            fg_color='#00e5ff', hover_color='#67f0ff', text_color='white',
+                            font=kw.get('font'))
+                    rif.append(mix)
+                self._mix233 = mix if mix is not None else False
                 pack0, forget0 = self.pack, self.pack_forget
 
-                # [v5] utente: "disattiva il tasto SYNC" + "e anche la sua funzione": sui PC del
-                # titolare SYN non si mostra piu' e al suo posto compare MIX (col mixer collegato)
+                # [v5/v6] utente: "disattiva il tasto SYNC e anche la sua funzione" + "SYN lo togli
+                # a tutti": SYN non si mostra piu' a nessuno; al suo posto, solo dal titolare, MIX
                 def pack(*pa, **pk):
-                    try:
-                        mix.pack(side=pk.get('side', 'left'), padx=pk.get('padx', 4))
-                    except Exception:
-                        pass
+                    if mix is not None:
+                        try:
+                            mix.pack(side=pk.get('side', 'left'), padx=pk.get('padx', 4))
+                        except Exception:
+                            pass
                     return None
 
                 def pack_forget():
-                    try:
-                        mix.pack_forget()
-                    except Exception:
-                        pass
+                    if mix is not None:
+                        try:
+                            mix.pack_forget()
+                        except Exception:
+                            pass
                     return forget0()
                 self.pack, self.pack_forget = pack, pack_forget
-                try:
-                    from moduli.ui import add_tooltip
-                    add_tooltip(mix, 'Console XR18: fader, Solo, On e meter del mixer')
-                except Exception:
-                    pass
+                if mix is not None:
+                    try:
+                        from moduli.ui import add_tooltip
+                        add_tooltip(mix, 'Console XR18: fader, Solo, On e meter del mixer')
+                    except Exception:
+                        pass
             except Exception as e:
                 print('[233] bottone MIX: %s' % e)
 
         G.__init__ = __init__
         G._ver233 = _VER
-        _spegni_voce_guida()
-        print('[233] console XR18: bottone MIX accanto a SYN')
+        print('[233] SYN e voce guida tolti' + (' · console XR18 (MIX)' if titolare else ''))
         return True
     except Exception as e:
         print('[233] %s' % e)
