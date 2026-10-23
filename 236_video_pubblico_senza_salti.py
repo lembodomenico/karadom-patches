@@ -1,6 +1,6 @@
 # 236 - video monitor pubblico senza salti
 
-_VER = 1
+_VER = 2
 _SOGLIA_MS = 600
 
 
@@ -8,16 +8,6 @@ def _spenta():
     try:
         from moduli.database import Database
         return str(Database.get_config('patch_236', '1')).strip() in ('0', 'no', 'off')
-    except Exception:
-        return False
-
-
-def _titolare():
-    try:
-        from moduli.licensing import load_license
-        d = load_license() or {}
-        return (str(d.get('nome', '')).strip().lower(),
-                str(d.get('cognome', '')).strip().lower()) == ('domenico', 'lembo')
     except Exception:
         return False
 
@@ -48,8 +38,6 @@ def _filtra(engine):
 def apply():
     if _spenta():
         return False
-    if not _titolare():
-        return True
     try:
         import moduli.engine as me
         import moduli.system as ms
