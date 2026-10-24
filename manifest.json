@@ -160,7 +160,8 @@
     "236_video_pubblico_senza_salti.py",
     "239_preferiti_senza_blocchi.py",
     "240_niente_lavori_mentre_suona.py",
-    "241_regia_volume_base.py"
+    "241_regia_volume_base.py",
+    "242_regia_effetti.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -323,6 +324,7 @@
     "236_video_pubblico_senza_salti.py": "621c077f57ae9443",
     "239_preferiti_senza_blocchi.py": "7ad6937b9d350c2e",
     "240_niente_lavori_mentre_suona.py": "e268557973105110",
-    "241_regia_volume_base.py": "cc0e9751bbcade4b"
+    "241_regia_volume_base.py": "cc0e9751bbcade4b",
+    "242_regia_effetti.py": "48ffaaf6bfa240d1"
   }
 }
