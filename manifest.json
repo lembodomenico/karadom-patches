@@ -157,7 +157,9 @@
     "232_cerca_a_catalogo.py",
     "233_console_xr18.py",
     "234_testo_scorrevole_fluido.py",
-    "236_video_pubblico_senza_salti.py"
+    "236_video_pubblico_senza_salti.py",
+    "239_preferiti_senza_blocchi.py",
+    "240_niente_lavori_mentre_suona.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -295,7 +297,7 @@
     "202_suggerimenti_senza_doppi.py": "0e1727b2220304c9",
     "203_strumento_mixer_resta_expander.py": "90ba7a1ad4d7e58b",
     "204_suggerimenti_titoli_uguali_una_volta.py": "612f6a698fffc70a",
-    "205_registrazione_e_lista_dal_play.py": "b8b24650bb436665",
+    "205_registrazione_e_lista_dal_play.py": "49ce81f5d5786971",
     "207_richieste_remote_solo_se_abilitate.py": "0561270a9063732d",
     "208_pagina_live_invio_leggero.py": "0f534c7c17ab29b0",
     "209_basi_online_in_sottofondo.py": "14fe8442a7e81e49",
@@ -317,6 +319,8 @@
     "232_cerca_a_catalogo.py": "25319aa5f61a3413",
     "233_console_xr18.py": "8ed831d0a4df4f78",
     "234_testo_scorrevole_fluido.py": "1d7705f1c5982804",
-    "236_video_pubblico_senza_salti.py": "621c077f57ae9443"
+    "236_video_pubblico_senza_salti.py": "621c077f57ae9443",
+    "239_preferiti_senza_blocchi.py": "7ad6937b9d350c2e",
+    "240_niente_lavori_mentre_suona.py": "e268557973105110"
   }
 }
