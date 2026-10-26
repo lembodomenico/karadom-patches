@@ -1,5 +1,6 @@
 # 242 - regia effetti
 
+import json
 import os
 import threading
 import math
@@ -171,7 +172,11 @@ def effetti(m):
 
 
 # ------------------------------------------------------------------ 1) impostazione di partenza
-BASE = {"riverbero_db": -6.0, "delay_db": -18.0, "presenza_db": 2.0}   # = il MINIMO per tutti i brani: il brano puo' solo aggiungere
+BASE = {"riverbero_db": -6.0, "corto_db": -8.0, "delay_db": -18.0, "presenza_db": 2.0}   # = il MINIMO per tutti i brani: il brano puo' solo aggiungere
+# [25-10-2026] utente: "bisogna dare l'effetto sempre per ogni brano, ovvio che devi dare equilibrio, ma il riverbero
+# ci deve essere come anche il delay; i riverberi sono di due tipi, vanno usati entrambi". Prima ne usavo UNO solo
+# (scelta mia, "due insieme impastano"): FX3 restava fermo. Ora il PRIMO riverbero = LUNGO (ambiente), il SECONDO =
+# CORTO (corpo della voce), piu' il delay: sempre tutti e tre, il brano decide solo quanto.
 
 
 def configura(ip, log=print):
@@ -179,7 +184,7 @@ def configura(ip, log=print):
     try:
         mic = microfoni(m)
         fx = effetti(m)
-        riv = fx["riverbero"][:1]          # un solo riverbero sulla voce (due insieme impastano)
+        riv = fx["riverbero"][:2]          # lungo + corto: tutti e due, sempre
         dly = fx["delay"][:1]
         for c in mic:
             b = "/ch/%02d" % c
@@ -203,14 +208,14 @@ def configura(ip, log=print):
                 m.set(b + "/eq/%d/g" % k, float(n_gain(g)))
                 m.set(b + "/eq/%d/q" % k, float(n_q(q)))
             for k in range(1, 5):
-                lv = BASE["riverbero_db"] if k in riv else (BASE["delay_db"] if k in dly else -90.0)
+                lv = (BASE["riverbero_db"] if k == riv[0] else BASE["corto_db"]) if k in riv else                     (BASE["delay_db"] if k in dly else -90.0)
                 m.set(b + "/mix/%02d/level" % (6 + k), float(n_fader(lv)))
                 m.set(b + "/mix/%02d/tap" % (6 + k), 4)                                  # post fader
         for k in range(1, 5):
             if k in riv:
                 m.set("/rtn/%d/mix/fader" % k, float(n_fader(-3.0)))
                 m.set("/rtn/%d/mix/on" % k, 1)
-                m.set("/fx/%d/par/08" % k, float(n_decay_s(1.8)))
+                m.set("/fx/%d/par/08" % k, float(n_decay_s(1.8 if k == riv[0] else 1.1)))
             elif k in dly:
                 m.set("/rtn/%d/mix/fader" % k, float(n_fader(-6.0)))
                 m.set("/rtn/%d/mix/on" % k, 1)
@@ -229,11 +234,15 @@ def scelte(a):
            "decay_s": {"ballata": 2.6, "medio": 1.8, "veloce": 1.2}[carattere],
            "riverbero_db": BASE["riverbero_db"] + {"ballata": 2.0, "medio": 1.0, "veloce": 0.0}[carattere],
            "delay_db": BASE["delay_db"] + {"ballata": 3.0, "medio": 1.5, "veloce": 0.0}[carattere],
+           "decay2_s": {"ballata": 1.3, "medio": 1.1, "veloce": 0.9}[carattere],
+           "corto_db": BASE["corto_db"] + {"ballata": 1.0, "medio": 0.5, "veloce": 0.0}[carattere],
            "presenza_db": BASE["presenza_db"] + (0.0 if br is None else (1.5 if br < 0.08 else (-1.5 if br > 0.18 else 0.0)))}
     if a.get("pianobar"):
         out["carattere"] += " piano bar"
         out["decay_s"] = min(3.2, out["decay_s"] + 0.6)
         out["riverbero_db"] += 1.0
+        out["decay2_s"] = min(1.6, out["decay2_s"] + 0.3)
+        out["corto_db"] += 1.0
         out["delay_db"] -= 4.0
     if bpm:
         ms = 60000.0 / bpm
@@ -243,28 +252,53 @@ def scelte(a):
     return out
 
 
+def nostri_accesi():
+    """[25-10] Gli effetti NOSTRI (programma Mixer XR18) sono accesi? Battito in effetti_nostri.json (<5 s)."""
+    try:
+        d = json.load(open(os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+                                        "KaraDom", "effetti_nostri.json"), encoding="utf-8"))
+        return bool(d.get("acceso")) and time.time() - float(d.get("ts", 0)) < 5.0
+    except Exception:
+        return False
+
+
 def brano(ip, a, log=print):
     sc = scelte(a)
     m = Mixer(ip)
     try:
         mic = microfoni(m)
         fx = effetti(m)
-        riv, dly = fx["riverbero"][:1], fx["delay"][:1]
-        for k in riv:
-            m.set("/fx/%d/par/08" % k, float(n_decay_s(sc["decay_s"])))
+        riv, dly = fx["riverbero"][:2], fx["delay"][:1]
+        if nostri_accesi():
+            # [25-10] utente, scelta 1: SOLO i nostri effetti. Quelli dell'XR18 restano spenti (code doppie =
+            # impasto); qui si regola solo la presenza della voce. Riverbero/delay li fa il Mixer (regia_brano.json).
+            for k in riv + dly:
+                m.set("/rtn/%d/mix/on" % k, 0)
+            for c in mic:
+                m.set("/ch/%02d/eq/3/g" % c, float(n_gain(sc["presenza_db"])))
+            log("brano %s: effetti NOSTRI accesi -> effetti XR18 lasciati spenti, presenza %+.1f dB"
+                % (sc["carattere"], sc["presenza_db"]))
+            return sc
+        for i, k in enumerate(riv):
+            m.set("/fx/%d/par/08" % k, float(n_decay_s(sc["decay_s"] if i == 0 else sc["decay2_s"])))
         for k in dly:
             if "delay_ms" in sc:
                 m.set("/fx/%d/par/01" % k, float(n_delay_ms(sc["delay_ms"])))
+        # [25-10] utente: "l'effetto si deve sentire": i RITORNI erano quasi chiusi (FX2 -20, delay -49) e la regia
+        # regolava solo le mandate -> non si sentiva niente. Ora a ogni brano ritorni aperti: riverberi -3, delay -6.
+        for k in riv + dly:
+            m.set("/rtn/%d/mix/on" % k, 1)
+            m.set("/rtn/%d/mix/fader" % k, float(n_fader(-3.0 if k in riv else -6.0)))
         for c in mic:
             b = "/ch/%02d" % c
-            for k in riv:
-                m.set(b + "/mix/%02d/level" % (6 + k), float(n_fader(sc["riverbero_db"])))
+            for i, k in enumerate(riv):
+                m.set(b + "/mix/%02d/level" % (6 + k), float(n_fader(sc["riverbero_db"] if i == 0 else sc["corto_db"])))
             for k in dly:
                 m.set(b + "/mix/%02d/level" % (6 + k), float(n_fader(sc["delay_db"])))
             m.set(b + "/eq/3/g", float(n_gain(sc["presenza_db"])))
-        log("brano %s: delay %s ms, riverbero %.1f s, voce->riverbero %+.0f dB, voce->delay %+.0f dB, presenza %+.1f dB"
-            % (sc["carattere"], sc.get("delay_ms", "-"), sc["decay_s"], sc["riverbero_db"], sc["delay_db"],
-               sc["presenza_db"]))
+        log("brano %s: riverbero lungo FX%s %.1f s %+.0f dB, corto FX%s %.1f s %+.0f dB, delay FX%s %s ms %+.0f dB, "
+            "presenza %+.1f dB" % (sc["carattere"], riv[:1], sc["decay_s"], sc["riverbero_db"], riv[1:2], sc["decay2_s"],
+                                   sc["corto_db"], dly, sc.get("delay_ms", "-"), sc["delay_db"], sc["presenza_db"]))
         return sc
     finally:
         m.chiudi()
@@ -351,7 +385,7 @@ def analizza(path, ffmpeg="ffmpeg", sr=11025):
 
 
 # ================================================================== aggancio a KaraDom
-_VER = 10
+_VER = 14
 _LOCK = threading.Lock()
 _STATO = {"ip": None, "t": 0.0, "gen": 0}
 
@@ -817,7 +851,104 @@ def _mic_base(ch, v=None):
         c.close()
 
 
+# [24-10 v11] GUADAGNO automatico dei microfoni. Utente: "non si autoregola". Col gain a +20 dB il canto
+# leggero arrivava a -52 dB: sotto la soglia del fader (-50) la regia non lo vedeva, e il fader recupera 3 dB.
+# Ora, mentre si canta, i picchi di ogni microfono si portano fra -18 e -10 dB col GUADAGNO (headamp), 1 dB
+# per passo; il guadagno trovato si ricorda (tabella agc, 'gain_NN') e si riparte da li'.
+GAIN_MAX = 45.0
+GAIN_MIN = 0.0
+
+
+def _gain_salvato(ch, v=None):
+    with _LOCK:
+        c = _db()
+        c.execute('CREATE TABLE IF NOT EXISTS agc (chiave TEXT PRIMARY KEY, valore REAL)')
+        k = 'gain_%02d' % ch
+        if v is None:
+            r = c.execute('SELECT valore FROM agc WHERE chiave=?', (k,)).fetchone()
+            c.close()
+            return r[0] if r else None
+        c.execute('INSERT OR REPLACE INTO agc VALUES (?, ?)', (k, float(v)))
+        c.commit()
+        c.close()
+
+
+def _headamp(m, ch):
+    src = m.get('/ch/%02d/config/insrc' % ch)
+    return '/headamp/%02d/gain' % ((int(src) if src is not None else ch - 1) + 1)
+
+
+def _gain_passo(m, picchi):
+    """picchi: {canale: picco degli ultimi 3 s di canto (dB)}."""
+    for ch, pk in picchi.items():
+        a = _headamp(m, ch)
+        n = m.get(a)
+        if n is None:
+            continue
+        g = float(n) * 72.0 - 12.0
+        if pk < -18.0 and g < GAIN_MAX:
+            nuovo = min(GAIN_MAX, g + min(3.0, (-14.0 - pk) / 2.0))
+        elif pk > -10.0 and g > GAIN_MIN:
+            nuovo = max(GAIN_MIN, g - min(3.0, (pk + 14.0) / 2.0))
+        else:
+            continue
+        nuovo = round(nuovo * 2) / 2.0
+        if abs(nuovo - g) < 0.5:
+            continue
+        m.set(a, float((nuovo + 12.0) / 72.0))
+        _gain_salvato(ch, nuovo)
+        _log('microfono %d: picchi %.0f dB -> guadagno %+.1f -> %+.1f dB' % (ch, pk, g, nuovo))
+
+
+# [24-10 v11] anche la BASE si regola sul livello VERO che arriva al mixer (prima: un fader deciso a inizio
+# brano dal file, senza sapere quanto forte la manda KaraDom). Obiettivo: la base nel mix (livello + fader)
+# a BASE_OBIETTIVO di media; se l'utente sposta il fader a mano, l'obiettivo si sposta con lui e si ricorda.
+BASE_OBIETTIVO = -27.0      # [24-10] a -20 "si alza anche troppo"
+
+
+def _base_obiettivo(v=None):
+    with _LOCK:
+        c = _db()
+        c.execute('CREATE TABLE IF NOT EXISTS agc (chiave TEXT PRIMARY KEY, valore REAL)')
+        if v is None:
+            r = c.execute("SELECT valore FROM agc WHERE chiave='base_obiettivo'").fetchone()
+            c.close()
+            return r[0] if r else BASE_OBIETTIVO
+        c.execute("INSERT OR REPLACE INTO agc VALUES ('base_obiettivo', ?)", (float(v),))
+        c.commit()
+        c.close()
+
+
+def _base_passo(m, base, livello_pre):
+    """livello_pre: media degli ultimi 3 s della base PRIMA del fader (dB)."""
+    if livello_pre < -60:
+        return
+    ch0 = base[0]
+    ora_n = m.get('/ch/%02d/mix/fader' % ch0)
+    if ora_n is None:
+        return
+    ora = db_fader(ora_n)
+    messo = _AGC.setdefault('base_messo', None)
+    obiettivo = _AGC.get('base_obiettivo')
+    if obiettivo is None:
+        obiettivo = _AGC['base_obiettivo'] = _base_obiettivo()
+    if messo is not None and abs(ora - messo) > 1.0:          # spostato a mano: e' il suo gusto
+        obiettivo = _AGC['base_obiettivo'] = obiettivo + (ora - messo)
+        _base_obiettivo(obiettivo)
+        _log('base spostata a mano di %+.1f dB: nuovo livello base %.1f dB' % (ora - messo, obiettivo))
+    voluto = max(-30.0, min(6.0, obiettivo - livello_pre))
+    if abs(voluto - ora) < 0.75:
+        _AGC['base_messo'] = ora
+        return
+    nuovo = ora + max(-0.5, min(0.5, voluto - ora))
+    for ch in base:
+        m.set('/ch/%02d/mix/fader' % ch, float(n_fader(nuovo)))
+        _AGC['fader'][ch] = nuovo
+    _AGC['base_messo'] = nuovo
+
+
 def _agc_inizio_brano():
+    _AGC['base_messo'] = None          # il fader della base messo a inizio brano non e' una mossa a mano
     _AGC['messo'] = {}
     _AGC['t_canali'] = 0
 
@@ -830,6 +961,7 @@ def _agc_giro():
     s = None
     ultimo_abbonamento = 0.0
     ultimo_passo = 0.0
+    ultimo_gain = 0.0
     while True:
         try:
             if str(_config('regia_agc', '1')).strip() in ('0', 'no', 'off') or not _suona():
@@ -882,15 +1014,35 @@ def _agc_giro():
             base_storia.append((adesso, b_lv))
             while base_storia and adesso - base_storia[0][0] > 3:
                 base_storia.popleft()
+            if adesso - ultimo_gain > 2.0:
+                ultimo_gain = adesso
+                picchi = {}
+                for ch in mic:
+                    canto = [v for _, v in storia[ch] if v > -65]
+                    if len(canto) >= 10:
+                        picchi[ch] = max(canto)
+                if picchi:
+                    mg = Mixer(ip)
+                    try:
+                        _gain_passo(mg, picchi)
+                    finally:
+                        mg.chiudi()
             if adesso - ultimo_passo < 0.5:
                 continue
             ultimo_passo = adesso
             cb = sum(v for _, v in base_storia) / len(base_storia)
             if cb < -70:
                 continue                                   # base ferma o muta: niente da seguire
+            pre = cb - _AGC['fader'].get(base[0], 0.0)
+            mb = Mixer(ip)
+            try:
+                _base_passo(mb, base, pre)
+            finally:
+                mb.chiudi()
+            cb = pre + _AGC['fader'].get(base[0], 0.0)
             medie = {}
             for ch in mic:
-                canta = [v for _, v in storia[ch] if v > -50]
+                canta = [v for _, v in storia[ch] if v > -60]
                 if len(canta) >= 6:
                     medie[ch] = sum(canta) / len(canta)
             if not medie:

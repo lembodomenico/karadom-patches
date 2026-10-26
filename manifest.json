@@ -157,11 +157,18 @@
     "232_cerca_a_catalogo.py",
     "233_console_xr18.py",
     "234_testo_scorrevole_fluido.py",
+    "235_testo_sfumato_prova.py",
     "236_video_pubblico_senza_salti.py",
+    "237_convertitore_righe_grassetto.py",
     "239_preferiti_senza_blocchi.py",
     "240_niente_lavori_mentre_suona.py",
     "241_regia_volume_base.py",
-    "242_regia_effetti.py"
+    "242_regia_effetti.py",
+    "245_db_brani.py",
+    "246_spia_avvio.py",
+    "247_ridisegna_avvio.py",
+    "248_djset_non_si_pianta.py",
+    "249_tono_si_azzera.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -321,10 +328,17 @@
     "232_cerca_a_catalogo.py": "25319aa5f61a3413",
     "233_console_xr18.py": "8ed831d0a4df4f78",
     "234_testo_scorrevole_fluido.py": "1d7705f1c5982804",
+    "235_testo_sfumato_prova.py": "20c2e6ce5bb1a606",
     "236_video_pubblico_senza_salti.py": "621c077f57ae9443",
+    "237_convertitore_righe_grassetto.py": "0436bd58dfdd6a65",
     "239_preferiti_senza_blocchi.py": "7ad6937b9d350c2e",
     "240_niente_lavori_mentre_suona.py": "e268557973105110",
     "241_regia_volume_base.py": "cc0e9751bbcade4b",
-    "242_regia_effetti.py": "48ffaaf6bfa240d1"
+    "242_regia_effetti.py": "159b3a6758d6fbf8",
+    "245_db_brani.py": "fa1ecf2cee707541",
+    "246_spia_avvio.py": "26481f949631f5fc",
+    "247_ridisegna_avvio.py": "e6efa1f9a69621fe",
+    "248_djset_non_si_pianta.py": "9fb69288c77063ff",
+    "249_tono_si_azzera.py": "f6589ea91c10e8b7"
   }
 }
