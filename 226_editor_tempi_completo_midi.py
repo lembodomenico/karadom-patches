@@ -10,7 +10,7 @@ import moduli.karaoke_editor as _ke
 KaraokeTimestampEditor = _ke.__dict__.setdefault('_orig226', _ke.KaraokeTimestampEditor)
 from moduli.syncro_text import _split_syllables
 
-_VER = 1
+_VER = 2
 
 
 class _Suono:
@@ -529,7 +529,23 @@ class EditorTempiMidi(KaraokeTimestampEditor):
         self._riga_suona = idx
         if idx is not None and self.tree.exists(str(idx)):
             self.tree.item(str(idx), tags=('suona',))
-            self.tree.see(str(idx))
+            self._centra(str(idx))
+
+    def _centra(self, iid):
+        """[30-10-2026] La riga resta al CENTRO della lista: con see() finiva sul bordo e non si vedeva."""
+        tv = self.tree
+        try:
+            n = len(tv.get_children())
+            if not n:
+                return
+            i = tv.index(iid)
+            tv.update_idletasks()
+            top, bot = tv.yview()
+            vis = max(1, int(round((bot - top) * n)))
+            primo = max(0, min(i - vis // 2, n - vis))
+            tv.yview_moveto(primo / n)
+        except Exception:
+            tv.see(iid)
 
     def _giro_play(self):
         if not self.player or not self.player.is_playing():
@@ -562,6 +578,7 @@ class EditorTempiMidi(KaraokeTimestampEditor):
         if i + 1 < len(self.sylt_entries):
             self.tree.selection_set(str(i + 1))
             self.tree.focus(str(i + 1))
+            self._centra(str(i + 1))
         self.status_var.set(f"Sillaba {i + 1} '{t.strip()}' → {self._fmt_time(int(ms))}")
 
     def _update_info(self):
