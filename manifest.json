@@ -170,7 +170,8 @@
     "246_spia_avvio.py",
     "247_ridisegna_avvio.py",
     "248_djset_non_si_pianta.py",
-    "249_tono_si_azzera.py"
+    "249_tono_si_azzera.py",
+    "253_ricerca_richieste_tollerante.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -343,6 +344,7 @@
     "246_spia_avvio.py": "26481f949631f5fc",
     "247_ridisegna_avvio.py": "e6efa1f9a69621fe",
     "248_djset_non_si_pianta.py": "9fb69288c77063ff",
-    "249_tono_si_azzera.py": "f6589ea91c10e8b7"
+    "249_tono_si_azzera.py": "f6589ea91c10e8b7",
+    "253_ricerca_richieste_tollerante.py": "34f531cda0224418"
   }
 }
