@@ -64,8 +64,6 @@ def _titolare():
 
 
 def apply():
-    if not _titolare():
-        return False
     try:
         from moduli.database import Database
         if str(Database.get_config('patch_253', '1')).strip() in ('0', 'no', 'off'):
