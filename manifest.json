@@ -172,7 +172,8 @@
     "248_djset_non_si_pianta.py",
     "249_tono_si_azzera.py",
     "253_ricerca_richieste_tollerante.py",
-    "256_dj_ottimizza_come_winlive.py"
+    "256_dj_ottimizza_come_winlive.py",
+    "257_syncro_salva_come_salva_brano.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -347,6 +348,7 @@
     "248_djset_non_si_pianta.py": "9fb69288c77063ff",
     "249_tono_si_azzera.py": "f6589ea91c10e8b7",
     "253_ricerca_richieste_tollerante.py": "34f531cda0224418",
-    "256_dj_ottimizza_come_winlive.py": "ba5cf1117cf32e57"
+    "256_dj_ottimizza_come_winlive.py": "ba5cf1117cf32e57",
+    "257_syncro_salva_come_salva_brano.py": "269a59c113fb746f"
   }
 }
