@@ -175,7 +175,8 @@
     "256_dj_ottimizza_come_winlive.py",
     "257_syncro_salva_come_salva_brano.py",
     "258_filtro_senza_accenti_apostrofi.py",
-    "259_filtro_playlist_tollerante.py"
+    "259_filtro_playlist_tollerante.py",
+    "261_video_tono_vlc_muto.py"
   ],
   "hash": {
     "002_patch_arrivano_subito.py": "4ada2c8ec1407bd2",
@@ -353,6 +354,7 @@
     "256_dj_ottimizza_come_winlive.py": "ba5cf1117cf32e57",
     "257_syncro_salva_come_salva_brano.py": "269a59c113fb746f",
     "258_filtro_senza_accenti_apostrofi.py": "3fd843ce279c1245",
-    "259_filtro_playlist_tollerante.py": "edf8a4a46934bb13"
+    "259_filtro_playlist_tollerante.py": "edf8a4a46934bb13",
+    "261_video_tono_vlc_muto.py": "3e9a90d814ffdb50"
   }
 }
