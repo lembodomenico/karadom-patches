@@ -1,4 +1,4 @@
-_VER = 1
+_VER = 2
 
 
 def _spenta():
@@ -9,13 +9,27 @@ def _spenta():
         return False
 
 
+def _versione_ok():
+    try:
+        from moduli.versione import APP_VERSION
+    except Exception:
+        try:
+            from versione import APP_VERSION
+        except Exception:
+            return False
+    try:
+        return tuple(int(x) for x in str(APP_VERSION).strip().split('.')[:3]) >= (5, 3, 12)
+    except Exception:
+        return False
+
+
 def apply():
-    if _spenta():
+    if _spenta() or not _versione_ok():
         return False
     try:
         from moduli import karadom_engine as eng
     except Exception:
-        return False                     # KaraDom con VLC: niente motore, niente da fare
+        return False
     R = getattr(eng, '_Riproduzione', None)
     if R is None or getattr(R, '_buchi265', None) == _VER:
         return R is not None
@@ -67,12 +81,21 @@ def apply():
             b.BASS_StreamPutData(src, ctypes.c_void_p(ptr + salta * 8), (n - salta) * 8)
         self.t_fine_audio = t + n / float(B.RATE)
 
+    def _coda_max(self):
+        n = self.__dict__.get('_coda_max_n')
+        if n is None:
+            w, h = self.dim if self.dim and self.dim[0] else (1920, 1080)
+            per_foto = max(1, int(w * h * 1.5))
+            n = max(self.CODA_VIDEO * 4, min(int(3.0 * (self.fps or 30.0)), 300 * 2 ** 20 // per_foto))
+            self.__dict__['_coda_max_n'] = n
+        return n
+
     def _metti_video(self, foto, gen):
         while len(self.video) >= self.CODA_VIDEO and not self.fine.is_set():
             if self.salto_gen != gen:
                 return
             if self.canale and self.primo_pronto.is_set() and not self.in_pausa \
-                    and len(self.video) < self.CODA_VIDEO * 4 and self._in_coda_audio() < 0.3:
+                    and len(self.video) < _coda_max(self) and self._in_coda_audio() < 0.5:
                 break
             time.sleep(0.004)
         self.video.append(foto)
